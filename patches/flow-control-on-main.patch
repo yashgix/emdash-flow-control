@@ -1,9 +1,10 @@
-From d35c798aeb7fc3e93c75a134fdc22b64a0e087cf Mon Sep 17 00:00:00 2001
-From: verify <verify@example.invalid>
-Date: Wed, 25 Nov 2026 03:58:45 +0000
+From 527d1a26a20aa85361b07b58695a1f0ff6d881cd Mon Sep 17 00:00:00 2001
+From: yashgix <125082291+yashgix@users.noreply.github.com>
+Date: Tue, 24 Nov 2026 23:25:03 -0500
 Subject: [PATCH] feat(remote): keep typing responsive under bulk terminal
  output on SSH hosts
 
+Adds an interactive lane, an adaptive bulk window, per-viewer credit accounting, backpressure to the PTY, a bounded outbound queue and attachment identity for reconnects.
 ---
  .../services/hosts/node/bulk-window.test.ts   | 138 ++++
  .../core/services/hosts/node/bulk-window.ts   | 128 +++
@@ -9388,5 +9389,5 @@ index 84ed35351..cd6d9e10a 100644
        asn1: 0.2.6
        bcrypt-pbkdf: 1.0.2
 -- 
-2.39.5
+2.52.0
 

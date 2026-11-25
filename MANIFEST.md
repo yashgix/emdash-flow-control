@@ -4,9 +4,9 @@
 |---|---|
 | `.gitignore` |      174 B |
 | `LICENSE` |    11395 B |
-| `README.md` |     9252 B |
+| `README.md` |     9918 B |
 | `REPRODUCE.md` |     5234 B |
-| `REVISIONS.md` |     1526 B |
+| `REVISIONS.md` |     1702 B |
 | `data/p29-runs.csv` |     6717 B |
 | `data/p29-table.md` |     2306 B |
 | `fonts/CommitMono-latin-400.woff2` |    48128 B |
@@ -14,16 +14,16 @@
 | `fonts/Inter-latin-variable.woff2` |    48256 B |
 | `fonts/LICENSE-CommitMono.txt` |     4389 B |
 | `fonts/LICENSE-Inter.txt` |     4477 B |
-| `index.html` |    52007 B |
-| `issue/COMMENT-3426.md` |     2595 B |
+| `index.html` |    52671 B |
+| `issue/COMMENT-3426.md` |     2746 B |
 | `issue/FINAL-ISSUE-BODY.md` |     3395 B |
 | `issue/FINAL-ISSUE-TITLE.txt` |       57 B |
 | `issue/UPDATE-COMMENT.md` |      374 B |
 | `method.md` |     3076 B |
-| `patches/flow-control-on-main.patch` |   334830 B |
+| `patches/flow-control-on-main.patch` |   335022 B |
 | `patches/flow-control-squashed.patch` |   334454 B |
 | `patches/flow-control.bundle` |    84773 B |
-| `patches/stale-frames-sharing.patch` |    30902 B |
+| `patches/stale-frames-sharing.patch` |    35481 B |
 | `patches/stale-topic-frames-ae7df3123..ac95235a1.patch` |    23796 B |
 | `proof/docker/Dockerfile` |      362 B |
 | `proof/harness/analyze.py` |     4904 B |
@@ -49,7 +49,8 @@
 | `scripts/export_runs.py` |     2384 B |
 | `scripts/table_p29_from_raw.py` |     3845 B |
 | `table.md` |     2306 B |
-| `tests/stale-topic-frames.test.ts` |    19608 B |
+| `tests/stale-topic-frames.test.ts` |    20653 B |
 | `traces/README.md` |      389 B |
 | `traces/tsdown-core.jsonl` |    72811 B |
 | `traces/vitest-wire.jsonl` |   109359 B |
+| `verification/flow-control-on-main.md` |     1597 B |

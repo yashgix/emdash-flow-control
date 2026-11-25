@@ -1,8 +1,8 @@
 From 65f0d06603516c50a0295c582d757f433db49439 Mon Sep 17 00:00:00 2001
 From: yashgix <125082291+yashgix@users.noreply.github.com>
 Date: Tue, 24 Nov 2026 20:20:02 -0500
-Subject: [PATCH] fix(wire): ignore topic frames from an attachment the client
- already left
+Subject: [PATCH 1/2] fix(wire): ignore topic frames from an attachment the
+ client already left
 
 update, topic-gap and topic-error frames carry only the topic, so a frame still in
 flight for a closed attachment was applied to a newer attachment of the same topic.
@@ -842,6 +842,105 @@ index 000000000..db86d43fb
 +    h.close();
 +  });
 +});
+-- 
+2.52.0
+
+
+From 37da0c09932dea521e0d19f029c2d1d41c1d559c Mon Sep 17 00:00:00 2001
+From: yashgix <125082291+yashgix@users.noreply.github.com>
+Date: Tue, 24 Nov 2026 23:21:45 -0500
+Subject: [PATCH 2/2] fix(wire): keep the shared attachment id from a cancelled
+ attach
+
+A shared attach that is cancelled before its result arrives never told the client
+the id of the attachment the server shared with it. The result is now read when it
+arrives late, so a frame stamped with that id is dropped after the topic is reopened.
+---
+ packages/wire/src/api/connect.ts              | 20 ++++++++++++++-
+ .../wire/src/api/stale-topic-frames.test.ts   | 25 +++++++++++++++++++
+ 2 files changed, 44 insertions(+), 1 deletion(-)
+
+diff --git a/packages/wire/src/api/connect.ts b/packages/wire/src/api/connect.ts
+index 94fcb0078..73426b8cc 100644
+--- a/packages/wire/src/api/connect.ts
++++ b/packages/wire/src/api/connect.ts
+@@ -119,6 +119,10 @@ export function connect(transport: WireTransport, options: ConnectOptions = {}):
+       abandonedAttachIds.delete(abandonedAttachIds.keys().next().value as string);
+     }
+   }
++  // Attach requests cancelled before their result arrived. A late result still tells us the id of the
++  // attachment the server shared with us, so frames stamped with it can be recognised.
++  const cancelledAttaches = new Map<string, string>();
++  const MAX_CANCELLED_ATTACHES = 256;
+   const isAbandoned = (topic: string, attachId: string | undefined): boolean =>
+     attachId !== undefined && (abandonedAttachIds.get(topic)?.has(attachId) ?? false);
+   const blobConsumers = new Map<string, BlobConsumer>();
+@@ -142,7 +146,15 @@ export function connect(transport: WireTransport, options: ConnectOptions = {}):
+     if (disposed) return;
+     if (message.kind === 'result') {
+       const pendingCall = pending.get(message.id);
+-      if (!pendingCall) return;
++      if (!pendingCall) {
++        const cancelledTopic = cancelledAttaches.get(message.id);
++        if (cancelledTopic !== undefined) {
++          cancelledAttaches.delete(message.id);
++          if (message.ok && typeof message.value === 'string')
++            abandon(cancelledTopic, message.value);
++        }
++        return;
++      }
+       pending.delete(message.id);
+       pendingCall.cleanup();
+       if (message.ok) {
+@@ -574,6 +586,12 @@ export function connect(transport: WireTransport, options: ConnectOptions = {}):
+         attachments.delete(topic);
+         abandon(topic, current.attachId);
+         abandon(topic, current.serverAttachId);
++        if (!current.establishedSettled && current.attachId !== undefined) {
++          cancelledAttaches.set(current.attachId, topic);
++          if (cancelledAttaches.size > MAX_CANCELLED_ATTACHES) {
++            cancelledAttaches.delete(cancelledAttaches.keys().next().value as string);
++          }
++        }
+         current.attemptAbort?.abort(new WireError('CANCELLED', 'Wire attach cancelled'));
+         current.attemptAbort = null;
+         try {
+diff --git a/packages/wire/src/api/stale-topic-frames.test.ts b/packages/wire/src/api/stale-topic-frames.test.ts
+index db86d43fb..673bbc61b 100644
+--- a/packages/wire/src/api/stale-topic-frames.test.ts
++++ b/packages/wire/src/api/stale-topic-frames.test.ts
+@@ -393,6 +393,31 @@ describe('topic attachment compatibility', () => {
+     h.close();
+   });
+ 
++  it('drops a stale error after a shared attach was cancelled before its result arrived', async () => {
++    const h = harness();
++    const second = connect(h.pair.client, { callTimeoutMs: 0 });
++    await h.connection.attach(topic, () => {});
++    h.pair.serverToClient.held = true;
++    const controller = new AbortController();
++    const cancelled = second.attach(topic, () => {}, { signal: controller.signal });
++    await vi.waitFor(() =>
++      expect(h.pair.serverToClient.queue.some((m) => m.kind === 'result' && m.ok)).toBe(true)
++    );
++    h.subscriptions[0].onError(new WireError('HANDLER_ERROR', 'old'), { retrying: false });
++    controller.abort();
++    await cancelled.catch(() => {});
++    const updates: LiveUpdate[] = [];
++    const reopened = second.attach(topic, (update) => updates.push(update));
++    h.pair.serverToClient.flush();
++    await reopened;
++    await vi.waitFor(() => expect(h.subscriptions).toHaveLength(2));
++    h.subscriptions[1].push(u2);
++
++    expect(updates).toEqual([u2]);
++    second.dispose();
++    h.close();
++  });
++
+   it('re-attaches after disconnect and ignores frames from the old session', async () => {
+     const h = harness();
+     const updates: LiveUpdate[] = [];
 -- 
 2.52.0
 
