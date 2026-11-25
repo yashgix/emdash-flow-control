@@ -1,5 +1,7 @@
 # emdash-flow-control
 
+Case study: [yashgix.github.io/emdash-flow-control](https://yashgix.github.io/emdash-flow-control/) · Wire-protocol issue: [generalaction/emdash#3446](https://github.com/generalaction/emdash/issues/3446)
+
 Keeping typing responsive in a busy remote terminal in [Emdash](https://github.com/generalaction/emdash), a desktop app that runs coding agents on remote machines over SSH. Open `index.html` for the case study, with an interactive comparison of the versions and a walkthrough of a separate wire-protocol fix.
 
 ## The problem
@@ -50,7 +52,7 @@ The diagram and the congestion walkthrough are under Technical details in `index
 
 The fix stamps the attach id on the three frames, and the client drops a stamped frame whose id is not its entry's current id (43 lines added, 8 removed). 14 new regression tests run the real `serve`, `connect` and `ReplicaLog` over an in-memory transport: with the fix the wire suite passes (367 tests), and on unchanged upstream 10 of the 14 fail, with 4 guards that pass on both.
 
-One design question is left for the Emdash maintainers: whether two connections on one transport should keep sharing a topic attachment. The issue text is in [`issue/`](issue/), the patch in [`patches/`](patches/) and the test file in [`tests/`](tests/).
+One design question is left for the Emdash maintainers: whether two connections on one transport should keep sharing a topic attachment. The issue is [generalaction/emdash#3446](https://github.com/generalaction/emdash/issues/3446). Its text is in [`issue/`](issue/), the patch in [`patches/`](patches/) and the test file in [`tests/`](tests/).
 
 ## Evidence and walkthrough
 - `index.html`: the case study. Overview for a short read, Technical details for the architecture, method, results and the protocol walkthrough.
@@ -61,7 +63,7 @@ One design question is left for the Emdash maintainers: whether two connections 
 [`REPRODUCE.md`](REPRODUCE.md) lists the layout, the pinned checkouts, the patch, the build, the Docker setup and the commands for the 45-run experiment. It has not been run on a clean machine, and whether the results reproduce on other hardware is not verified.
 
 ## Upstream status
-Neither contribution has been submitted. The flow-control change is a patch on Emdash `9e2942b8` (`patches/flow-control-squashed.patch`, with a git bundle). Open upstream pull request [#3444](https://github.com/generalaction/emdash/pull/3444) changes some of the same files (`host-runtime-connection.ts`, `follower.ts`), so the patch would need rebasing. The wire-protocol issue is written and not yet filed.
+The wire-protocol issue was filed as [#3446](https://github.com/generalaction/emdash/issues/3446) on 24 Nov 2026, and no pull request has been opened. The flow-control change has not been proposed to Emdash. It is a patch on Emdash `9e2942b8` (`patches/flow-control-squashed.patch`, with a git bundle). Open upstream pull request [#3444](https://github.com/generalaction/emdash/pull/3444) changes some of the same files (`host-runtime-connection.ts`, `follower.ts`), so the flow-control patch would need rebasing. The same pull request adds an optional `onActivity` hook to `WireTransport` in `protocol.ts`, a different part of the file from the stale-frame fix.
 
 ## Files
 | Path | What |

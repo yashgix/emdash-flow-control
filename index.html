@@ -148,12 +148,12 @@ footer p{margin:0 0 6px}
 
 <section class="block" id="protocol-teaser">
 <h2>A separate fix in the wire protocol</h2>
-<p>While reading the protocol code, a different bug turned up. Frames sent for a closed topic can be applied to a reopened one. It has its own issue, tests and fix, and it is independent of the results above. In the tests the effect is one extra snapshot resync, and in one case a log that stops updating. In the desktop app the likely impact is the extra resync. <button class="btn" style="padding:3px 12px" data-tab="t" data-go="protocol">Open the walkthrough</button></p>
+<p>While reading the protocol code, a different bug turned up. Frames sent for a closed topic can be applied to a reopened one. It has its own issue (<a href="https://github.com/generalaction/emdash/issues/3446">#3446</a>), tests and fix, and it is independent of the results above. In the tests the effect is one extra snapshot resync, and in one case a log that stops updating. In the desktop app the likely impact is the extra resync. <button class="btn" style="padding:3px 12px" data-tab="t" data-go="protocol">Open the walkthrough</button></p>
 </section>
 
 <section class="block" id="status">
 <h2>Status</h2>
-<p>Neither contribution has been submitted upstream. The flow-control change is a patch on Emdash <code>9e2942b8</code>, and an open upstream pull request, <a href="https://github.com/generalaction/emdash/pull/3444">#3444</a>, changes some of the same files. The wire-protocol issue text is in the repository.</p>
+<p>The wire-protocol issue was filed upstream as <a href="https://github.com/generalaction/emdash/issues/3446">#3446</a>, and no pull request has been opened. The flow-control change has not been proposed to Emdash. It is a patch on Emdash <code>9e2942b8</code>, and an open upstream pull request, <a href="https://github.com/generalaction/emdash/pull/3444">#3444</a>, changes some of the same files. The same pull request adds an optional <code>onActivity</code> hook to <code>WireTransport</code> in <code>protocol.ts</code>, a different part of the file from the stale-frame fix.</p>
 <p class="mut">The numbers come from one machine with emulated links and real commands. Technical details lists what that does and does not show.</p>
 </section>
 </div></div>
@@ -262,7 +262,7 @@ footer p{margin:0 0 6px}
 <p>The frozen log comes from the test harness, which injects the error through the source. In the desktop app the likely impact is the extra snapshot resync, because no log source in the current code reports a non-retrying error. This is separate from #3426.</p>
 <h3>Open question for the maintainers</h3>
 <p>Should two connections on one transport keep sharing a topic attachment? Today the server keeps one attachment per topic and both connections receive its frames. Replacing the attachment changes that, and a later topic-only detach from the replaced connection could remove the replacement. If sharing should stay, the server can keep its behavior and each client can drop only the ids it abandoned itself.</p>
-<p>The issue text is <a href="issue/FINAL-ISSUE-BODY.md">issue/FINAL-ISSUE-BODY.md</a> and the patch is <a href="patches/stale-topic-frames-ae7df3123..ac95235a1.patch">patches/stale-topic-frames-ae7df3123..ac95235a1.patch</a>.</p>
+<p>The issue is <a href="https://github.com/generalaction/emdash/issues/3446">generalaction/emdash#3446</a>. Its text is <a href="issue/FINAL-ISSUE-BODY.md">issue/FINAL-ISSUE-BODY.md</a>, the test file is <a href="tests/stale-topic-frames.test.ts">tests/stale-topic-frames.test.ts</a> and the patch is <a href="patches/stale-topic-frames-ae7df3123..ac95235a1.patch">patches/stale-topic-frames-ae7df3123..ac95235a1.patch</a>.</p>
 </section>
 
 <section class="block" id="limits">
@@ -285,7 +285,7 @@ footer p{margin:0 0 6px}
 <li><a href="REPRODUCE.md">REPRODUCE.md</a>, <code>proof/</code>: the harness, plans and Docker setup. <a href="REVISIONS.md">REVISIONS.md</a>: pinned revisions.</li>
 <li><code>patches/flow-control-squashed.patch</code> and <code>patches/flow-control.bundle</code>: the flow-control change on upstream <code>9e2942b8</code>.</li>
 <li><a href="traces/README.md">traces/</a>: two sample recorded traces.</li>
-<li>Related upstream work: <a href="https://github.com/generalaction/emdash/issues/3426">#3426</a>, and the open pull request <a href="https://github.com/generalaction/emdash/pull/3444">#3444</a> on reconnect loops on busy hosts, which changes the same host connection and follower files.</li>
+<li>Related upstream work: <a href="https://github.com/generalaction/emdash/issues/3426">#3426</a>, and the open pull request <a href="https://github.com/generalaction/emdash/pull/3444">#3444</a> on reconnect loops on busy hosts, which changes the same host connection and follower files and also touches <code>protocol.ts</code> in a different place from the stale-frame fix.</li>
 </ul>
 </section>
 </div>
