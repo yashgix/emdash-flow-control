@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Emdash terminal flow control</title>
+<meta name="description" content="Keeping typing responsive in a busy remote terminal: measured results, architecture and a separate wire-protocol fix for the Emdash desktop app.">
+<style>
+:root{--bg:#faf9f7;--surface:#fff;--sunk:#f1efeb;--line:rgba(20,20,20,.13);--fg:#161616;--mut:#595959;--acc:#a4443a;--acc-soft:rgba(164,68,58,.1);--grey:#7a7a7a;--grey2:#c4c4c4;--sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;--mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#0b0b0c;--surface:#131315;--sunk:#0f0f10;--line:rgba(255,255,255,.12);--fg:#f2f2f2;--mut:#a3a3a3;--acc:#d9776b;--acc-soft:rgba(217,119,107,.13);--grey:#7d7d7d;--grey2:#4a4a4a;color-scheme:dark}}
+:root[data-theme=dark]{--bg:#0b0b0c;--surface:#131315;--sunk:#0f0f10;--line:rgba(255,255,255,.12);--fg:#f2f2f2;--mut:#a3a3a3;--acc:#d9776b;--acc-soft:rgba(217,119,107,.13);--grey:#7d7d7d;--grey2:#4a4a4a;color-scheme:dark}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:72px}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 var(--sans);-webkit-font-smoothing:antialiased}
+a{color:var(--acc);text-underline-offset:3px}a:hover{text-decoration-thickness:2px}
+:focus-visible{outline:2px solid var(--acc);outline-offset:2px;border-radius:4px}
+.wrap{max-width:1080px;margin:0 auto;padding:0 20px}
+header.top{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+header.top .wrap{display:flex;align-items:center;gap:14px;height:56px}
+.brand{font:500 13px var(--mono);letter-spacing:.01em;color:var(--fg);text-decoration:none;margin-right:auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.brand b{color:var(--acc);font-weight:500}
+.pills{display:flex;gap:4px;background:var(--sunk);border:1px solid var(--line);border-radius:999px;padding:3px}
+.pill{font:500 13px var(--sans);color:var(--mut);background:none;border:0;border-radius:999px;padding:6px 14px;cursor:pointer}
+.pill[aria-selected=true],.pill[aria-pressed=true]{background:var(--fg);color:var(--bg)}
+.pill:not([aria-selected=true]):not([aria-pressed=true]):hover{color:var(--fg)}
+.icon{font:500 12px var(--mono);color:var(--mut);background:none;border:1px solid var(--line);border-radius:999px;padding:6px 11px;cursor:pointer}
+.icon:hover{color:var(--fg)}
+.eyebrow{font:500 12px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--acc);margin:0 0 14px}
+h1{font-weight:500;font-size:clamp(1.9rem,4.4vw,3rem);line-height:1.12;letter-spacing:-.025em;margin:0 0 18px;max-width:20ch}
+h2{font-weight:600;font-size:1.45rem;letter-spacing:-.015em;margin:0 0 12px;line-height:1.25}
+h3{font-weight:600;font-size:1.02rem;margin:26px 0 6px}
+p{margin:0 0 14px}.lede{font-size:1.12rem;color:var(--mut);max-width:62ch}.mut{color:var(--mut)}
+section.block{padding:44px 0;border-top:1px solid var(--line)}
+section.hero{padding:56px 0 40px}
+.stats{display:grid;grid-template-columns:1fr;gap:12px;margin:30px 0 8px}
+@media(min-width:560px){.stats{grid-template-columns:1fr 1fr}}@media(min-width:1000px){.stats{grid-template-columns:repeat(4,1fr)}}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px}
+.stat .n{font:500 1.9rem/1.15 var(--sans);letter-spacing:-.02em}.stat .n.s{font-size:1.25rem;padding:.35rem 0}
+.stat p{font-size:.92rem;color:var(--mut);margin:6px 0 0}
+.cta{display:flex;flex-wrap:wrap;gap:10px;margin-top:22px}
+.btn{display:inline-block;font:500 14px var(--sans);text-decoration:none;border-radius:999px;padding:9px 18px;border:1px solid var(--line);color:var(--fg);background:none;cursor:pointer}
+.btn.p{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.callout{border-left:3px solid var(--acc);background:var(--acc-soft);border-radius:0 10px 10px 0;padding:12px 16px;margin:18px 0}
+.callout p:last-child{margin:0}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px}
+.label{font:500 11px var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--mut)}
+.seg{display:inline-flex;gap:4px;background:var(--sunk);border:1px solid var(--line);border-radius:999px;padding:3px;flex-wrap:wrap}
+.controls{display:flex;flex-wrap:wrap;gap:16px 24px;align-items:flex-end;margin:14px 0}
+.controls>div{display:flex;flex-direction:column;gap:6px}
+.race{display:grid;gap:14px;margin:14px 0}
+.lane{display:grid;grid-template-columns:1fr;gap:6px;padding:12px 14px;background:var(--surface);border:1px solid var(--line);border-radius:12px}
+.lane.me{border-color:var(--acc)}
+.lane .head{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:.92rem}
+.lane .head b{font-weight:600}.lane .head span{color:var(--mut);font-family:var(--mono);font-size:12px}
+.track{position:relative;height:14px;background:var(--sunk);border:1px solid var(--line);border-radius:999px;overflow:hidden}
+.track i{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--grey);border-radius:999px}
+.lane.me .track i{background:var(--acc)}
+.track u{position:absolute;top:-1px;bottom:-1px;width:2px;background:var(--fg);opacity:.6}
+.rowlbl{display:flex;justify-content:space-between;font:12px var(--mono);color:var(--mut)}
+.note{font-size:.86rem;color:var(--mut)}
+.explain{display:grid;gap:12px;margin-top:6px}@media(min-width:760px){.explain{grid-template-columns:1fr 1.3fr}}
+.chips{display:flex;gap:3px;flex-wrap:nowrap;overflow:hidden;margin:6px 0}
+.chip{height:18px;border-radius:4px;background:var(--grey2);flex:0 0 auto}.chip.k{background:var(--acc);width:18px}
+.bars{display:grid;gap:12px;margin:12px 0}
+.bar{display:grid;grid-template-columns:104px 1fr 64px;gap:8px;align-items:center;font-size:.88rem;margin-top:7px}
+.bar .t{background:var(--sunk);border-radius:999px;height:11px}.bar .t i{display:block;height:11px;border-radius:999px;background:var(--grey)}
+.bar.me .t i{background:var(--acc)}.bar em{font-style:normal;text-align:right;font-family:var(--mono);font-size:12px}
+table{border-collapse:collapse;width:100%;font-size:.88rem;display:block;overflow-x:auto}
+th,td{border-bottom:1px solid var(--line);padding:7px 10px;text-align:right;white-space:nowrap}th:first-child,td:first-child,th:nth-child(2),td:nth-child(2){text-align:left}
+th{font:500 11px var(--mono);letter-spacing:.05em;text-transform:uppercase;color:var(--mut)}
+tr.me td{background:var(--acc-soft)}
+.tech{display:grid;grid-template-columns:minmax(0,1fr);gap:0}
+@media(min-width:960px){.tech{grid-template-columns:210px minmax(0,1fr);gap:40px}}
+.index{display:none}
+@media(min-width:960px){.index{display:block;position:sticky;top:76px;align-self:start;padding-top:44px}}
+.index a{display:block;font-size:.88rem;color:var(--mut);text-decoration:none;padding:5px 0 5px 12px;border-left:2px solid var(--line)}
+.index a:hover,.index a.on{color:var(--fg);border-color:var(--acc)}
+.index .label{margin-bottom:8px;padding-left:12px}
+.dwrap{margin:8px 0}.diagram{display:block;width:100%;height:auto;color:var(--fg)}.tall{display:none}@media(max-width:720px){.wide{display:none}.tall{display:block}}
+.diagram text{fill:currentColor;font-family:var(--sans)}.diagram .box{fill:var(--surface);stroke:var(--line);stroke-width:1.2}.diagram .acc{stroke:var(--acc)}
+.diagram .ln{stroke:currentColor;stroke-width:1.4;fill:none}.diagram .dash{stroke-dasharray:5 4}.diagram .m{font-family:var(--mono);font-size:11.5px;fill:var(--mut)}
+code{font:.88em var(--mono);background:var(--sunk);border:1px solid var(--line);border-radius:5px;padding:1px 5px}
+ol.steps{padding-left:20px}ol.steps li{margin-bottom:8px}
+.timeline-ctl{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0}
+.outcome{border:1px solid var(--line);border-radius:12px;padding:12px 16px;background:var(--surface);margin-top:8px}
+.outcome.bad{border-color:var(--acc)}
+footer{border-top:1px solid var(--line);padding:26px 0 48px;color:var(--mut);font-size:.9rem}
+footer p{margin:0 0 6px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+[hidden]{display:none!important}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+<a class="sr" href="#main">Skip to content</a>
+<header class="top"><div class="wrap">
+<a class="brand" href="#" data-tab="o"><b>~</b> emdash-flow-control</a>
+<div class="pills" role="tablist" aria-label="Page sections">
+<button class="pill" role="tab" id="tab-o" aria-controls="o" aria-selected="true" data-tab="o">Overview</button>
+<button class="pill" role="tab" id="tab-t" aria-controls="t" aria-selected="false" data-tab="t">Technical details</button>
+</div>
+<button class="icon" id="theme" aria-label="Color theme">System</button>
+</div></header>
+
+<main id="main">
+<div id="o" role="tabpanel" aria-labelledby="tab-o"><div class="wrap">
+<section class="hero">
+<p class="eyebrow">Case study · Emdash remote terminals</p>
+<h1>Keeping typing responsive in a busy remote terminal</h1>
+<p class="lede">Emdash runs coding agents on remote machines over SSH. When several terminals print a lot of output, the keys you type wait behind it, and on a slow link the p95 echo latency was 9 to 11 seconds. This project changes how Emdash sends terminal output so typing stays close to the network delay, and measures what that costs.</p>
+<div class="stats">
+<div class="stat"><div class="n" style="color:var(--acc)">19× lower</div><p>p95 typing echo latency on the fast link, 0.48 s against 9.0 s, with 8 terminals running real commands.</p></div>
+<div class="stat"><div class="n">+20%</div><p>time for heavy commands to finish, against unmodified upstream on the fast and 5 Mbit links. Against upstream with SSH compression it is +48% and +38%.</p></div>
+<div class="stat"><div class="n" style="color:var(--acc)">98%</div><p>of output delivered on the 5 Mbit link, with p95 echo of 0.51 s. Upstream delivered 31%, and upstream with compression 100% at a p95 of 7.3 s.</p></div>
+<div class="stat"><div class="n s">No measurable slowdown</div><p>for commands that print little, such as a test run. All versions took about 28 s.</p></div>
+</div>
+<div class="cta"><a class="btn p" href="#compare">Compare the versions</a><button class="btn" data-tab="t">Technical details</button><a class="btn" href="https://github.com/yashgix/emdash-flow-control">Source and data</a></div>
+</section>
+
+<section class="block" id="problem">
+<h2>The problem</h2>
+<p>Emdash sends every terminal's output to the desktop app over one SSH connection. A busy terminal fills that connection, and the echo of a key you type queues behind output you are not even looking at. Typing then feels frozen even though the link is fine for other things. <a href="https://github.com/generalaction/emdash/issues/3426">Issue #3426</a> describes the same symptom on a high-latency host.</p>
+<h2 style="margin-top:28px">What the change does</h2>
+<ul>
+<li><b>A separate lane for typing.</b> Keystrokes and the output of the sessions you are typing into use a second channel, so they do not wait behind bulk updates in Emdash's own queues.</li>
+<li><b>Credit for background output.</b> The server sends a terminal's output only while the app is keeping up with it.</li>
+<li><b>Back-pressure to the program.</b> When the app falls behind, Emdash pauses reading the terminal, and the program slows down as it would in a plain SSH session.</li>
+</ul>
+<p>The architecture and its limits are under <button class="btn" style="padding:3px 12px" data-tab="t" data-go="architecture">Technical details</button>.</p>
+</section>
+
+<section class="block" id="compare">
+<h2>Compare the versions</h2>
+<p class="mut">Pick a link and press the button. Each row replays the recorded median of 3 runs: how long a typed key waited for its echo, and how long the 8 background commands took. It is a replay of recorded numbers, not a live measurement. The vertical mark on each key track is the recorded p95.</p>
+<div class="controls">
+<div><span class="label" id="lk">Link</span><div class="seg" role="group" aria-labelledby="lk" id="linkSeg"></div></div>
+<div><span class="label" id="sp">Replay speed</span><div class="seg" role="group" aria-labelledby="sp" id="speedSeg"></div></div>
+<div><button class="btn p" id="go">Type a key</button></div>
+</div>
+<div class="race" id="race" aria-live="polite"></div>
+<p class="note" id="raceNote"></p>
+<div class="explain">
+<div class="panel"><span class="label">How one echo travels</span><div id="queueViz"></div></div>
+<div class="panel"><span class="label">What this version does</span><div id="queueTxt"></div></div>
+</div>
+<div class="callout"><p><b>Trade-off.</b> Heavy commands finish later because the terminal waits for the app instead of racing ahead. Output can still be dropped when a backlog gets too old or too large (0.05 MB per session on the 5 Mbit link, against 0.61 MB for upstream). Commands that print little are not affected, and interrupted-link results did not improve. See the table under Technical details.</p></div>
+</section>
+
+<section class="block" id="protocol-teaser">
+<h2>A separate fix in the wire protocol</h2>
+<p>While reading the protocol code, a different bug turned up. Frames sent for a closed topic can be applied to a reopened one. It has its own issue, tests and fix, and it is independent of the results above. In the tests the effect is one extra snapshot resync, and in one case a log that stops updating. In the desktop app the likely impact is the extra resync. <button class="btn" style="padding:3px 12px" data-tab="t" data-go="protocol">Open the walkthrough</button></p>
+</section>
+
+<section class="block" id="status">
+<h2>Status</h2>
+<p>Neither contribution has been submitted upstream. The flow-control change is a patch on Emdash <code>9e2942b8</code>, and an open upstream pull request, <a href="https://github.com/generalaction/emdash/pull/3444">#3444</a>, changes some of the same files. The wire-protocol issue text is in the repository.</p>
+<p class="mut">The numbers come from one machine with emulated links and real commands. Technical details lists what that does and does not show.</p>
+</section>
+</div></div>
+
+<div id="t" role="tabpanel" aria-labelledby="tab-t" hidden><div class="wrap tech">
+<nav class="index" aria-label="On this page"><div class="label">On this page</div>
+<a href="#architecture">Architecture</a><a href="#congestion">When the link is slow</a><a href="#method">Method</a><a href="#results">Results</a><a href="#protocol">Wire-protocol fix</a><a href="#limits">Limits</a><a href="#evidence">Evidence and code</a></nav>
+<div>
+<section class="block" id="architecture" style="border-top:0">
+<h2>Architecture</h2>
+<div class="dwrap"><svg class="diagram wide" viewBox="0 0 900 360" role="img" aria-label="The desktop app and the remote server are joined by two Wire channels over one SSH connection. On the server, a credit gate, an outbound queue and the terminal process are chained, with pressure flowing back to the process.">
+<defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker></defs>
+<rect class="box" x="10" y="20" width="170" height="320" rx="12"/><text x="95" y="48" text-anchor="middle" font-weight="600" font-size="14">Desktop app</text>
+<g font-size="13" text-anchor="middle"><text x="95" y="86">terminal viewer</text><text x="95" y="104">for each session</text>
+<text x="95" y="156">sends keystrokes</text><text x="95" y="174">and resizes</text>
+<text x="95" y="226">returns credit as</text><text x="95" y="244">it consumes output</text>
+<text x="95" y="294">reports when its</text><text x="95" y="312">own buffer is full</text></g>
+<rect class="box acc" x="250" y="40" width="220" height="82" rx="10"/><text x="360" y="66" text-anchor="middle" font-weight="600" font-size="14">Interactive lane</text><g font-size="12" text-anchor="middle"><text x="360" y="88">keys, resizes, and output of up to</text><text x="360" y="106">2 recently typed sessions</text></g>
+<rect class="box" x="250" y="180" width="220" height="82" rx="10"/><text x="360" y="206" text-anchor="middle" font-weight="600" font-size="14">Bulk channel</text><g font-size="12" text-anchor="middle"><text x="360" y="228">all other output, SSH window</text><text x="360" y="246">0.5 to 32 MiB, adaptive</text></g>
+<text class="m" x="360" y="296" text-anchor="middle">one SSH connection, one TCP stream</text><text class="m" x="360" y="314" text-anchor="middle">zlib compression</text>
+<rect class="box" x="540" y="20" width="350" height="320" rx="12"/><text x="715" y="48" text-anchor="middle" font-weight="600" font-size="14">Remote workspace server</text>
+<rect class="box" x="562" y="70" width="306" height="62" rx="8"/><text x="715" y="96" text-anchor="middle" font-size="14">Credit gate, one per viewer</text><text class="m" x="715" y="116" text-anchor="middle">sends while bytes in flight fit the window</text>
+<rect class="box" x="562" y="150" width="306" height="62" rx="8"/><text x="715" y="176" text-anchor="middle" font-size="14">Outbound queue</text><text class="m" x="715" y="196" text-anchor="middle">fair share per topic, old output resyncs</text>
+<rect class="box" x="562" y="230" width="306" height="62" rx="8"/><text x="715" y="256" text-anchor="middle" font-size="14">Terminal process (PTY)</text><text class="m" x="715" y="276" text-anchor="middle">reads paused while pressure is set</text>
+<text class="m" x="715" y="324" text-anchor="middle">output flows left, credit and pressure flow back</text>
+<g class="ln" marker-end="url(#ar)"><path d="M540 80H470"/><path d="M540 221H470"/><path d="M250 80H180"/><path d="M250 221H180"/><path d="M180 112H250"/></g>
+<path class="ln dash" d="M868 261H890V101H868" marker-end="url(#ar)" transform="translate(0 0)"/>
+</svg><svg class="diagram tall" viewBox="0 0 360 650" role="img" aria-label="The desktop app and the remote server are joined by an interactive lane and a bulk channel over one SSH connection. On the server, a credit gate, an outbound queue and the terminal process are chained, with pressure flowing back to the process.">
+<defs><marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker></defs>
+<rect class="box" x="10" y="10" width="340" height="130" rx="12"/><text x="180" y="38" text-anchor="middle" font-weight="600" font-size="16">Desktop app</text>
+<g font-size="14" text-anchor="middle"><text x="180" y="66">terminal viewer for each session</text><text x="180" y="88">sends keystrokes and resizes</text><text x="180" y="110">returns credit as it consumes output</text><text x="180" y="130">reports when its own buffer is full</text></g>
+<rect class="box acc" x="10" y="200" width="160" height="104" rx="10"/><text x="90" y="226" text-anchor="middle" font-weight="600" font-size="15">Interactive lane</text><g font-size="13" text-anchor="middle"><text x="90" y="250">keys, resizes, output of</text><text x="90" y="268">up to 2 recently</text><text x="90" y="286">typed sessions</text></g>
+<rect class="box" x="190" y="200" width="160" height="104" rx="10"/><text x="270" y="226" text-anchor="middle" font-weight="600" font-size="15">Bulk channel</text><g font-size="13" text-anchor="middle"><text x="270" y="250">all other output</text><text x="270" y="268">SSH window 0.5 to</text><text x="270" y="286">32 MiB, adaptive</text></g>
+<text class="m" x="165" y="326" text-anchor="middle" font-size="12.5">one SSH connection,</text><text class="m" x="165" y="344" text-anchor="middle" font-size="12.5">one TCP stream, zlib</text>
+<g class="ln" marker-end="url(#ar2)"><path d="M60 200V142"/><path d="M240 200V142"/><path d="M120 142V198"/><path d="M40 350V306"/><path d="M300 350V306"/></g>
+<rect class="box" x="10" y="350" width="340" height="290" rx="12"/><text x="180" y="378" text-anchor="middle" font-weight="600" font-size="16">Remote workspace server</text>
+<rect class="box" x="26" y="394" width="308" height="62" rx="8"/><text x="180" y="418" text-anchor="middle" font-size="14">Credit gate, one per viewer</text><text class="m" x="180" y="440" text-anchor="middle" font-size="12.5">sends while bytes in flight fit the window</text>
+<rect class="box" x="26" y="476" width="308" height="62" rx="8"/><text x="180" y="500" text-anchor="middle" font-size="14">Outbound queue</text><text class="m" x="180" y="522" text-anchor="middle" font-size="12.5">fair share per topic, old output resyncs</text>
+<rect class="box" x="26" y="558" width="308" height="62" rx="8"/><text x="180" y="582" text-anchor="middle" font-size="14">Terminal process (PTY)</text><text class="m" x="180" y="604" text-anchor="middle" font-size="12.5">reads paused while pressure is set</text>
+<text class="m" x="180" y="636" text-anchor="middle" font-size="12">output flows up, credit and pressure flow back</text>
+</svg></div>
+<p class="note">Numbers in this section are the defaults in the code.</p>
+<h3>Interactive lane</h3>
+<p>A second Wire channel runs next to the bulk channel on the same SSH connection. Keystrokes, resizes and the output of up to 2 recently typed sessions use it, so they do not wait behind bulk updates in Emdash's own send queues. A session returns to bulk after 30 s idle or when another session displaces it. Both channels still share one SSH connection and one TCP stream, so bytes already in flight can still delay an echo. The adaptive window below limits how many there are.</p>
+<h3>Adaptive bulk window</h3>
+<p>The SSH window of the bulk channel is tuned from measured round trips, between 512 KiB and 32 MiB, starting at the stock 2 MiB. If the smoothed round trip rises more than 50 ms above the path's base round trip, the window shrinks by a factor of 0.7. Otherwise it can grow by 1.25. The 50 ms is a target for the controller, not a bound on echo delay.</p>
+<h3>Credit accounting</h3>
+<p>For each attached viewer the server adds up the size of every update it sends, and the viewer returns credit as it consumes them. The server sends only while the unacknowledged amount stays inside a window, and it always lets one update through when nothing is in flight. The window adapts to the measured round trip and delivery rate, up to 4 MiB. The size of an update is the length of its JSON text, <code>JSON.stringify(update).length</code>, which both sides count the same way. That is a count of UTF-16 code units, not exact bytes on the wire. Updates over the window wait in a queue of up to 1 MiB.</p>
+<h3>Back-pressure to the terminal process</h3>
+<p>When more than 256 KiB is waiting for a viewer, the gate reports pressure. The viewer can also report that its own buffer is full. While either is set, the terminal session calls <code>pause()</code> on its PTY process, which stops Emdash from reading the PTY. The program keeps writing until the kernel's PTY buffer fills, and then its next write blocks. Pressure clears below 128 KiB and reading resumes.</p>
+<h3>Outbound queue</h3>
+<p>When the writer pushes back, small control frames keep their order and each live topic gets its own lane. Lanes share the writer by deficit round robin with a 64 KiB quantum. A topic whose oldest queued update is older than 3 s, or that holds more than 16 MiB, drops its backlog and sends a gap, and the viewer resyncs from a snapshot.</p>
+</section>
+
+<section class="block" id="congestion">
+<h2>When the link is slow</h2>
+<ol class="steps">
+<li>Eight terminals print. Each viewer's credit window fills, so the server queues their output instead of sending it.</li>
+<li>Past 256 KiB queued, the gate raises pressure and Emdash stops reading that terminal's PTY.</li>
+<li>Once the kernel's PTY buffer is full, the program's next write blocks. The command waits, much as it would over plain SSH.</li>
+<li>The bulk window shrinks when round trips rise, so the SSH connection holds less bulk data. Keystrokes and echoes use the lane and wait behind less.</li>
+<li>When the app catches up and credit returns, pressure clears and the program continues.</li>
+<li>If a viewer returns no credit for 30 s, or a topic's backlog gets too old or too large, that output is dropped and the viewer resyncs from a snapshot.</li>
+</ol>
+<p><b>Trade-offs.</b> Commands with heavy output finish later, because they wait instead of racing ahead and having output discarded. A program that writes to the terminal while doing other work can stall on a paused PTY. Output can still be dropped: the modified runs skipped 0.05 MB per session on the 5 Mbit link, against 0.61 MB for upstream. The design adds coordination state, extra frame types and a larger attach and reconnect surface. It was tuned on recorded traces and may not suit every workload.</p>
+</section>
+
+<section class="block" id="method">
+<h2>Method</h2>
+<p>Eight background sessions each run one real command at the same time, started together from outside the shaped link. A ninth session receives one typed key every 150 ms, and the echo time is measured. Output goes through each session's terminal, so a paused terminal really blocks its command.</p>
+<ul>
+<li><b>Versions:</b> unmodified upstream, upstream with SSH compression, and the modified code.</li>
+<li><b>Heavy command:</b> a real type-check with full module tracing, about 3.2 MB of output per command. <b>Light command:</b> a real test run, about 6 KB.</li>
+<li><b>Links:</b> <code>tc netem</code> adds 300 ms of delay to the server's outgoing traffic, so the round trip is about 300 ms. The 5 Mbit cap and the 10 s cut (100% loss, starting 8 s after typing begins) apply to the same direction.</li>
+<li><b>Runs:</b> 3 repeats, interleaved, each one the only job of mine on the machine. A run counts only if all 8 commands exit 0. All 45 runs counted.</li>
+<li><b>Keys without an echo</b> are keys sent but not echoed within the observation window. The window ends when the commands finish, so on the cut link it can end before the link is restored.</li>
+</ul>
+<p>macOS storage-management processes averaged about 1.3 CPU cores on the machine in the days around the runs. It is not known whether they were busy during a given run. A stuck listing process ran earlier and was stopped before the three counted repeats. No run was dropped or rerun because of either. Full details: <a href="method.md">method.md</a>.</p>
+</section>
+
+<section class="block" id="results">
+<h2>Results</h2>
+<p class="mut">Median of 3 runs per cell. Ranges are in <a href="table.md">table.md</a> and every run is in <a href="data/p29-runs.csv">data/p29-runs.csv</a>.</p>
+<div class="controls"><div><span class="label" id="mt">Chart</span><div class="seg" role="group" aria-labelledby="mt" id="metricSeg"></div></div></div>
+<div class="bars" id="charts"></div>
+<div style="margin-top:18px"><table id="tbl"></table></div>
+<p class="note">Delivered is megabytes per session out of 3.25 for the heavy rows. The light rows print about 6 KB per command and all of it was delivered. Each light row lists upstream first, then modified.</p>
+</section>
+
+<section class="block" id="protocol">
+<h2>Wire-protocol fix: stale topic frames</h2>
+<p><code>update</code>, <code>topic-gap</code> and <code>topic-error</code> frames carry only the topic name. If a viewer closes a topic and a new viewer attaches to it while frames for the old attachment are still in flight, the client applies those frames to the new attachment. The client keeps one entry per topic and looks it up by topic alone (<code>connect.ts:136-155</code>).</p>
+<p class="mut">Step through the sequence from the regression tests. This is an illustration of the test sequence, not a recording of the app.</p>
+<div class="controls">
+<div><span class="label" id="fk">Stale frame</span><div class="seg" role="group" aria-labelledby="fk" id="kindSeg"></div></div>
+<div><span class="label" id="fx">Server</span><div class="seg" role="group" aria-labelledby="fx" id="fixSeg"></div></div>
+</div>
+<div class="dwrap"><svg class="diagram" id="seq" viewBox="0 0 900 300" role="img" aria-label="Sequence of a stale frame reaching a reopened attachment"></svg></div>
+<div class="timeline-ctl"><button class="btn" id="prev">Back</button><button class="btn p" id="next">Next step</button><button class="btn" id="replay">Restart</button><span class="note" id="stepNo"></span></div>
+<div class="outcome" id="stepText" aria-live="polite"></div>
+<h3>The fix</h3>
+<p>The server stamps the attach request id on the three frames as an optional <code>attachId</code>, and the client drops a stamped frame whose id is not its entry's current id. Unstamped frames behave as before, so old and new peers still talk to each other, although an old server gets no protection. The change is 43 lines added and 8 removed in <code>protocol.ts</code>, <code>serve.ts</code> and <code>connect.ts</code>. The branch also makes the server replace its attachment when an attach with a different id arrives for the same topic.</p>
+<h3>Regression tests</h3>
+<p>14 new tests in <code>stale-topic-frames.test.ts</code> run the real <code>serve</code>, <code>connect</code>, <code>LiveLogSource</code> and <code>ReplicaLog</code> over an in-memory transport whose server-to-client direction can be held and released in order. With the fix, the wire suite passes (367 tests). On unchanged upstream 10 of the 14 fail, and the other 4 are guards that pass on both.</p>
+<h3>What the frozen log means</h3>
+<p>The frozen log comes from the test harness, which injects the error through the source. In the desktop app the likely impact is the extra snapshot resync, because no log source in the current code reports a non-retrying error. This is separate from #3426.</p>
+<h3>Open question for the maintainers</h3>
+<p>Should two connections on one transport keep sharing a topic attachment? Today the server keeps one attachment per topic and both connections receive its frames. Replacing the attachment changes that, and a later topic-only detach from the replaced connection could remove the replacement. If sharing should stay, the server can keep its behavior and each client can drop only the ids it abandoned itself.</p>
+<p>The issue text is <a href="issue/FINAL-ISSUE-BODY.md">issue/FINAL-ISSUE-BODY.md</a> and the patch is <a href="patches/stale-topic-frames-ae7df3123..ac95235a1.patch">patches/stale-topic-frames-ae7df3123..ac95235a1.patch</a>.</p>
+</section>
+
+<section class="block" id="limits">
+<h2>Limits</h2>
+<ul>
+<li>One machine, emulated links, a fixed source tree and 3 repeats. Three repeats show large effects, and the completion-time ranges overlap.</li>
+<li>The heavy command prints 3.2 MB per terminal, less than a large build. The first choice, a larger project, ran out of memory with 8 at once.</li>
+<li>The typing window on heavy runs is short, about 70 keys.</li>
+<li>No real coding agent or real remote host was used.</li>
+<li>Link-cut recovery time could be measured in only one run, so it is not reported.</li>
+<li>An earlier comparison on replayed recorded output (6 network conditions) pointed the same way. In 3 of those conditions upstream did not finish session setup in the harness, which shows a limit of the harness, not that the app crashes.</li>
+<li>Reproducing the results on a clean machine, and the relative performance on other hardware, are not verified.</li>
+</ul>
+</section>
+
+<section class="block" id="evidence">
+<h2>Evidence and code</h2>
+<ul>
+<li><a href="data/p29-runs.csv">data/p29-runs.csv</a>: one row per counted run. <a href="data/p29-table.md">data/p29-table.md</a>: medians and ranges, built by <code>scripts/aggregate.py</code>.</li>
+<li><a href="REPRODUCE.md">REPRODUCE.md</a>, <code>proof/</code>: the harness, plans and Docker setup. <a href="REVISIONS.md">REVISIONS.md</a>: pinned revisions.</li>
+<li><code>patches/flow-control-squashed.patch</code> and <code>patches/flow-control.bundle</code>: the flow-control change on upstream <code>9e2942b8</code>.</li>
+<li><a href="traces/README.md">traces/</a>: two sample recorded traces.</li>
+<li>Related upstream work: <a href="https://github.com/generalaction/emdash/issues/3426">#3426</a>, and the open pull request <a href="https://github.com/generalaction/emdash/pull/3444">#3444</a> on reconnect loops on busy hosts, which changes the same host connection and follower files.</li>
+</ul>
+</section>
+</div>
+</div></div>
+</main>
+
+<footer><div class="wrap">
+<p>emdash-flow-control · Yash Gupta · <a href="https://github.com/yashgix/emdash-flow-control">GitHub</a> · <a href="https://www.linkedin.com/in/yash-guptaix/">LinkedIn</a></p>
+<p>An independent engineering case study. It is not made by or affiliated with Emdash or General Action, Inc.</p>
+</div></footer>
+
+<script>
+const DATA={"heavy":{"cut":{"modified":{"batch":14.0,"p50":332,"p95":11828,"delivered":3.25,"skipped":0.0,"noecho":44,"runs":3,"batchMin":11.7,"batchMax":15.0},"upstream":{"batch":10.3,"p50":315,"p95":2737,"delivered":2.11,"skipped":0.0,"noecho":164,"runs":3,"batchMin":9.8,"batchMax":12.3},"upstream+zlib":{"batch":10.9,"p50":318,"p95":2841,"delivered":2.48,"skipped":0.0,"noecho":177,"runs":3,"batchMin":9.2,"batchMax":13.9}},"fast":{"modified":{"batch":16.4,"p50":335,"p95":478,"delivered":3.25,"skipped":0.0,"noecho":0,"runs":3,"batchMin":13.5,"batchMax":16.9},"upstream":{"batch":13.7,"p50":3707,"p95":8989,"delivered":3.25,"skipped":0.0,"noecho":28,"runs":3,"batchMin":12.8,"batchMax":18.9},"upstream+zlib":{"batch":11.1,"p50":2996,"p95":7172,"delivered":3.25,"skipped":0.0,"noecho":8,"runs":3,"batchMin":10.5,"batchMax":18.2}},"slow":{"modified":{"batch":13.7,"p50":333,"p95":505,"delivered":3.2,"skipped":0.05,"noecho":0,"runs":3,"batchMin":12.9,"batchMax":17.0},"upstream":{"batch":11.4,"p50":6024,"p95":11186,"delivered":1.0,"skipped":0.61,"noecho":8,"runs":3,"batchMin":10.4,"batchMax":12.3},"upstream+zlib":{"batch":9.9,"p50":3196,"p95":7330,"delivered":3.25,"skipped":0.0,"noecho":0,"runs":3,"batchMin":9.8,"batchMax":15.7}}},"light":{"cut":{"modified":{"batch":28.0,"p50":9934,"p95":19230,"delivered":0.01,"skipped":0.0,"noecho":0,"runs":3,"batchMin":27.2,"batchMax":31.2},"upstream":{"batch":28.7,"p50":10472,"p95":21751,"delivered":0.01,"skipped":0.0,"noecho":134,"runs":3,"batchMin":28.4,"batchMax":35.2}},"fast":{"modified":{"batch":28.3,"p50":304,"p95":338,"delivered":0.01,"skipped":0.0,"noecho":0,"runs":3,"batchMin":26.8,"batchMax":33.3},"upstream":{"batch":27.7,"p50":303,"p95":340,"delivered":0.01,"skipped":0.0,"noecho":0,"runs":3,"batchMin":27.1,"batchMax":29.2}},"slow":{"modified":{"batch":27.7,"p50":304,"p95":339,"delivered":0.01,"skipped":0.0,"noecho":0,"runs":3,"batchMin":27.4,"batchMax":33.2},"upstream":{"batch":29.4,"p50":304,"p95":340,"delivered":0.01,"skipped":0.0,"noecho":0,"runs":3,"batchMin":27.8,"batchMax":32.2}}}};
+const ARMS=[{id:'pin',key:'upstream',name:'Upstream'},{id:'pinz',key:'upstream+zlib',name:'Upstream with SSH compression'},{id:'final',key:'modified',name:'Modified flow control',me:true}];
+const LINKS=[{id:'fast',name:'Fast'},{id:'slow',name:'5 Mbit'},{id:'cut',name:'10 s cut'}];
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const el=(t,a={},h='')=>{const e=document.createElement(t);for(const k in a)e.setAttribute(k,a[k]);e.innerHTML=h;return e};
+const fmtS=ms=>ms>=1000?(ms/1000).toFixed(1)+' s':ms+' ms';
+function seg(host,items,get,set,label){host.innerHTML='';items.forEach(it=>{const b=el('button',{class:'pill','aria-pressed':'false',type:'button'},it.name);b.onclick=()=>{set(it.id);paint()};host.append(b)});const paint=()=>[...host.children].forEach((b,i)=>b.setAttribute('aria-pressed',String(items[i].id===get())));paint();return paint}
+/* theme */
+const themeBtn=$('#theme');let theme='system';try{theme=localStorage.getItem('theme')||'system'}catch(e){}
+const qs=new URLSearchParams(location.search);if(qs.get('theme'))theme=qs.get('theme');
+function applyTheme(){if(theme==='system')document.documentElement.removeAttribute('data-theme');else document.documentElement.setAttribute('data-theme',theme);themeBtn.textContent=theme[0].toUpperCase()+theme.slice(1);themeBtn.setAttribute('aria-label','Color theme: '+theme+'. Press to change.')}
+themeBtn.onclick=()=>{theme={system:'light',light:'dark',dark:'system'}[theme];try{localStorage.setItem('theme',theme)}catch(e){}applyTheme()};applyTheme();
+/* tabs */
+function showTab(id,go){['o','t'].forEach(t=>{$('#'+t).hidden=t!==id;const b=$('#tab-'+t);b.setAttribute('aria-selected',String(t===id))});if(go)setTimeout(()=>document.getElementById(go)?.scrollIntoView(),80);else if(!go)window.scrollTo(0,0)}
+$$('[data-tab]').forEach(b=>b.addEventListener('click',e=>{e.preventDefault();showTab(b.dataset.tab,b.dataset.go)}));
+$('#tab-o').addEventListener('keydown',e=>{if(e.key==='ArrowRight'){showTab('t');$('#tab-t').focus()}});$('#tab-t').addEventListener('keydown',e=>{if(e.key==='ArrowLeft'){showTab('o');$('#tab-o').focus()}});
+/* demo 1 */
+let link=qs.get('link')||'fast',speed=1,activeArm='final',raf=0;
+const SPEEDS=[{id:1,name:'1×'},{id:4,name:'4×'}];
+const paintLink=seg($('#linkSeg'),LINKS,()=>link,v=>{link=v;draw()});
+const paintSpeed=seg($('#speedSeg'),SPEEDS,()=>speed,v=>{speed=v});
+function cell(a,l=link){return DATA.heavy[l][a.key]}
+function draw(){const host=$('#race');host.innerHTML='';const max=Math.max(...ARMS.map(a=>cell(a).p95))*1.08;const maxB=Math.max(...ARMS.map(a=>cell(a).batch))*1.05;
+ARMS.forEach(a=>{const c=cell(a),pct=Math.round(c.delivered/3.25*100);const lane=el('div',{class:'lane'+(a.me?' me':''),'data-arm':a.id});
+lane.innerHTML=`<div class="head"><b>${a.name}</b><span>${pct}% of output delivered · ${c.noecho} keys without an echo, summed over 3 runs</span></div>
+<div class="rowlbl"><span>Typed key, echo wait</span><span class="k">p50 ${fmtS(c.p50)} · p95 ${fmtS(c.p95)}</span></div><div class="track"><i data-k></i><u style="left:${c.p95/max*100}%"></u></div>
+<div class="rowlbl"><span>8 commands</span><span class="b">${c.batch.toFixed(1)} s to finish</span></div><div class="track"><i data-b></i></div>`;
+lane.addEventListener('click',()=>{activeArm=a.id;drawExplain()});host.append(lane)});
+$('#raceNote').textContent=link==='cut'?'On the cut link the link drops 8 s after typing starts and stays down for 10 s. All three modified runs have a p95: two are around 12 s and one is 0.49 s, so the median is 11.8 s.':'';
+reset();drawExplain()}
+function reset(){cancelAnimationFrame(raf);$$('#race [data-k]').forEach(i=>i.style.width='0');$$('#race [data-b]').forEach(i=>i.style.width='0')}
+function run(){reset();const max=Math.max(...ARMS.map(a=>cell(a).p95))*1.08,maxB=Math.max(...ARMS.map(a=>cell(a).batch))*1.05;const t0=performance.now();
+if(reduce){ARMS.forEach(a=>{const l=$(`.lane[data-arm=${a.id}]`),c=cell(a);l.querySelector('[data-k]').style.width=c.p50/max*100+'%';l.querySelector('[data-b]').style.width='100%'});return}
+const step=now=>{const t=(now-t0)*speed;let live=false;ARMS.forEach(a=>{const l=$(`.lane[data-arm=${a.id}]`),c=cell(a);const kw=Math.min(t,c.p50)/max*100;l.querySelector('[data-k]').style.width=kw+'%';const bw=Math.min(t/1000,c.batch)/c.batch*100;l.querySelector('[data-b]').style.width=bw+'%';if(t<c.p50||t/1000<c.batch)live=true});if(live)raf=requestAnimationFrame(step)};raf=requestAnimationFrame(step)}
+$('#go').onclick=run;
+const EXPL={pin:{viz:'one',txt:'<p>All output and the echo travel in the same queue, so a typed key waits behind every update already queued ahead of it. On the 5 Mbit link that was a median of 6.0 s, and only 1.0 of 3.25 MB arrived, with 0.61 MB skipped.</p>'},pinz:{viz:'one-small',txt:'<p>SSH compression shrinks the output, so more of it fits through the link and the commands finish sooner. Typing still shares the one queue with bulk output, so the echo waits behind it, 3.0 s on the fast link.</p>'},final:{viz:'two',txt:'<p>Typed keys use their own lane and are sent ahead of bulk updates. Bulk output is limited by credit and a tuned SSH window, and the terminal is paused when the app falls behind. Echoes stay near the 300 ms round trip, and the commands finish later than on the other versions.</p>'}};
+function drawExplain(){const e=EXPL[activeArm];$('#queueTxt').innerHTML=`<p><b>${ARMS.find(a=>a.id===activeArm).name}</b></p>`+e.txt;
+const chips=(n,w)=>Array.from({length:n},()=>`<span class="chip" style="width:${w}px"></span>`).join('');const k='<span class="chip k" title="typed key"></span>';
+let v='';if(e.viz==='one')v=`<p class="note">One queue to the app, oldest first</p><div class="chips">${chips(14,30)}${k}</div>`;
+if(e.viz==='one-small')v=`<p class="note">One queue, smaller updates</p><div class="chips">${chips(14,18)}${k}</div>`;
+if(e.viz==='two')v=`<p class="note">Interactive lane</p><div class="chips">${k}</div><p class="note">Bulk channel, held back by credit and the window</p><div class="chips">${chips(5,30)}</div>`;
+$('#queueViz').innerHTML=v+'<p class="note">The key chip is the typed key. Order shows who goes first. Chip counts are illustrative.</p>';
+$$('#race .lane').forEach(l=>l.style.outline=l.dataset.arm===activeArm?'1px solid var(--acc)':'none')}
+/* results */
+const METRICS=[{id:'batch',name:'Time to finish',f:c=>c.batch,u:' s',d:1},{id:'p95',name:'Echo p95',f:c=>c.p95/1000,u:' s',d:2},{id:'deliv',name:'Output delivered',f:c=>c.delivered/3.25*100,u:'%',d:0}];
+let metric='batch';
+const paintMetric=seg($('#metricSeg'),METRICS,()=>metric,v=>{metric=v;charts()});
+function charts(){const m=METRICS.find(x=>x.id===metric);const host=$('#charts');host.innerHTML='';
+LINKS.forEach(L=>{const vals=ARMS.map(a=>m.f(DATA.heavy[L.id][a.key]));const mx=Math.max(...vals,0.0001);const p=el('div',{class:'panel'});
+p.innerHTML=`<b>${L.name}</b> <span class="mut">${m.name}</span>`+ARMS.map((a,i)=>`<div class="bar${a.me?' me':''}"><span>${a.name.replace('Upstream with SSH compression','Upstream + zlib').replace(' flow control','')}</span><div class="t"><i style="width:${Math.max(vals[i]/mx*100,1.5)}%"></i></div><em>${vals[i].toFixed(m.d)}${m.u}</em></div>`).join('');host.append(p)})}
+function table(){const rows=['<tr><th>Link</th><th>Version</th><th>Time to finish</th><th>Echo p50</th><th>Echo p95</th><th>Delivered</th><th>Keys without an echo, sum of 3 runs</th></tr>'];
+LINKS.forEach(L=>ARMS.forEach((a,i)=>{const c=DATA.heavy[L.id][a.key];rows.push(`<tr class="${a.me?'me':''}"><td>${i?'':L.name}</td><td>${a.name}</td><td>${c.batch.toFixed(1)} s</td><td>${fmtS(c.p50)}</td><td>${fmtS(c.p95)}</td><td>${c.delivered} MB</td><td>${c.noecho}</td></tr>`)}));
+LINKS.forEach(L=>{const lu=DATA.light[L.id].upstream,lm=DATA.light[L.id].modified;rows.push(`<tr><td>Light, ${L.name}</td><td>Upstream, modified</td><td>${lu.batch.toFixed(1)} s, ${lm.batch.toFixed(1)} s</td><td>${fmtS(lu.p50)}, ${fmtS(lm.p50)}</td><td>${fmtS(lu.p95)}, ${fmtS(lm.p95)}</td><td>all</td><td>${lu.noecho}, ${lm.noecho}</td></tr>`)});$('#tbl').innerHTML=rows.join('')}
+/* demo 2 */
+let kind='update',fixed=false,step=1;
+const KINDS=[{id:'update',name:'update'},{id:'topic-gap',name:'topic-gap'},{id:'topic-error',name:'topic-error'}];
+const FIX=[{id:'n',name:'Without the fix'},{id:'y',name:'With the fix'}];
+const pk=seg($('#kindSeg'),KINDS,()=>kind,v=>{kind=v;step=0;seq()});
+const pf=seg($('#fixSeg'),FIX,()=>fixed?'y':'n',v=>{fixed=v==='y';step=0;seq()});
+const RESULT={update:['The new viewer receives an update from the old attachment. Its sequence check fails, so it takes one extra snapshot resync. The text stays correct.','The update carries id a1 and the entry has id a2, so the client drops it.'],
+'topic-gap':['The gap fires the new viewer\'s reattach callback, which causes one extra snapshot resync. The text stays correct.','The gap carries id a1 and the entry has id a2, so the client drops it.'],
+'topic-error':['The client deletes the new viewer\'s entry. In the test the log keeps its old text and the output that follows never arrives. The error is injected through the source, because no source in the current app reports one for a log topic.','The error carries id a1 and the entry has id a2, so the client drops it and keeps the entry.']};
+const narrow=matchMedia('(max-width:720px)');narrow.addEventListener('change',()=>seq());
+function seq(){const N=narrow.matches;const stamp=fixed?' (a1)':'';const lbl=kind+stamp;const sx=N?70:150,cx=N?290:750,mid=(sx+cx)/2,fs=N?13:13;const gap=N?64:50;
+const msgs=[{y:38,dir:1,t:'attach topic (a1)',show:1},{y:38+gap,dir:-1,t:lbl+' sent for A',show:2,dash:true},{y:38+2*gap,dir:1,t:'detach, then attach (a2)',show:3},{y:38+3*gap,dir:-1,t:lbl+' arrives',show:4}];
+const H=N?340:300;$('#seq').setAttribute('viewBox','0 0 '+(N?360:900)+' '+H);
+let s=`<defs><marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker></defs>
+<text x="${sx}" y="22" text-anchor="middle" font-weight="600" font-size="${N?14:13}">Server</text><text x="${cx}" y="22" text-anchor="middle" font-weight="600" font-size="${N?14:13}">App client</text>
+<line class="ln" x1="${sx}" y1="32" x2="${sx}" y2="${H-10}" stroke-opacity=".35"/><line class="ln" x1="${cx}" y1="32" x2="${cx}" y2="${H-10}" stroke-opacity=".35"/>`;
+msgs.forEach(m=>{if(step<m.show)return;const x1=m.dir>0?cx:sx,x2=m.dir>0?sx:cx;const y=m.y+22;const cls='ln'+(m.dash&&step<4?' dash':'');
+s+=`<path class="${cls}" d="M${x1} ${y}H${x2}" marker-end="url(#a2)"/><text x="${mid}" y="${y-8}" text-anchor="middle" font-size="${fs}">${m.t}</text>`});
+if(step>=3){const bx=N?120:620,bw=N?230:260,by=N?H-70:228;s+=`<rect class="box acc" x="${bx}" y="${by}" width="${bw}" height="52" rx="8"/><text class="m" x="${bx+bw/2}" y="${by+20}" text-anchor="middle" font-size="${N?12.5:11.5}">client entry for the topic</text><text x="${bx+bw/2}" y="${by+39}" text-anchor="middle" font-size="${N?13.5:13}">viewer B, attach id a2</text>`}
+$('#seq').innerHTML=s;
+const T=['Start. Viewer A is about to attach a topic.','Viewer A attaches. The server subscribes and the client entry has attach id a1.','The server produces a '+kind+' frame for A. It is now in flight to the client.','A closes and viewer B attaches the same topic. The client entry now has attach id a2, and the old frame is still in flight.','The old frame arrives.'];
+$('#stepNo').textContent='Step '+step+' of 4';let h='<p>'+T[step]+'</p>';
+if(step===4){h=`<p>${T[4]}</p><p><b>${fixed?'With the fix':'Without the fix'}:</b> ${fixed?RESULT[kind][1]:RESULT[kind][0]}</p>`}
+const o=$('#stepText');o.innerHTML=h;o.className='outcome'+(step===4&&!fixed&&kind==='topic-error'?' bad':'');
+$('#prev').disabled=step===0;$('#next').disabled=step===4}
+$('#next').onclick=()=>{step=Math.min(4,step+1);seq()};$('#prev').onclick=()=>{step=Math.max(0,step-1);seq()};$('#replay').onclick=()=>{step=0;seq()};
+/* index highlight */
+const idx=$$('.index a');const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting)idx.forEach(a=>a.classList.toggle('on',a.getAttribute('href')==='#'+e.target.id))}),{rootMargin:'-30% 0px -60% 0px'});$$('#t section').forEach(s=>io.observe(s));
+draw();charts();table();seq();
+const hash=location.hash.slice(1);if(hash){history.scrollRestoration='manual'}if(hash&&['t','architecture','congestion','method','results','protocol','limits','evidence'].includes(hash)){showTab('t',hash==='t'?'':hash)}
+if(qs.get('step')){step=+qs.get('step');if(qs.get('kind'))kind=qs.get('kind');if(qs.get('fix'))fixed=qs.get('fix')==='y';pk();pf();seq()}
+if(qs.get('run')==='1'){activeArm=qs.get('arm')||'final';drawExplain();ARMS.forEach(a=>{const l=$(`.lane[data-arm=${a.id}]`),c=cell(a),mx=Math.max(...ARMS.map(x=>cell(x).p95))*1.08;l.querySelector('[data-k]').style.width=c.p50/mx*100+'%';l.querySelector('[data-b]').style.width='100%'})}
+if(qs.get('h')){setTimeout(()=>{const d=document.createElement('div');d.id='dbg';d.textContent='H='+document.documentElement.scrollHeight;document.body.append(d)},300)}
+</script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+# test key, generated results and traces, local checkouts, dependency and build output
+proof/keys/
+proof/results/
+proof/traces/
+work/
+data/my-*
+node_modules/
+dist/
+.DS_Store

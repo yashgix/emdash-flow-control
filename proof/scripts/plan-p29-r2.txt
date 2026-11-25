@@ -1,0 +1,16 @@
+# real-workload benchmark, repeat 2. Method in method.md.
+p29-heavy-fast-pin-r2 emdash emdash phase0 300 - 1 0 -e WORKLOAD=heavy -e SESSIONS=8 -e DURATION_S=150 -e DRAIN_S=10
+p29-heavy-fast-pinz-r2 emdash emdash phase0 300 - 1 0 -e WORKLOAD=heavy -e COMPRESS=1 -e SESSIONS=8 -e DURATION_S=150 -e DRAIN_S=10
+p29-heavy-fast-final-r2 emdash emdash-epoch phase0 300 - 1 0 -e WORKLOAD=heavy -e LANE=1 -e WINDOW=1 -e COMPRESS=1 -e SESSIONS=8 -e DURATION_S=150 -e DRAIN_S=10
+p29-heavy-slow-pin-r2 emdash emdash phase0 300 5mbit 1 0 -e WORKLOAD=heavy -e SESSIONS=8 -e DURATION_S=150 -e DRAIN_S=10
+p29-heavy-slow-pinz-r2 emdash emdash phase0 300 5mbit 1 0 -e WORKLOAD=heavy -e COMPRESS=1 -e SESSIONS=8 -e DURATION_S=150 -e DRAIN_S=10
+p29-heavy-slow-final-r2 emdash emdash-epoch phase0 300 5mbit 1 0 -e WORKLOAD=heavy -e LANE=1 -e WINDOW=1 -e COMPRESS=1 -e SESSIONS=8 -e DURATION_S=150 -e DRAIN_S=10
+p29-heavy-cut-pin-r2 emdash emdash phase0 300 - 1 10 -e WORKLOAD=heavy -e SESSIONS=8 -e DURATION_S=150 -e DRAIN_S=10
+p29-heavy-cut-pinz-r2 emdash emdash phase0 300 - 1 10 -e WORKLOAD=heavy -e COMPRESS=1 -e SESSIONS=8 -e DURATION_S=150 -e DRAIN_S=10
+p29-heavy-cut-final-r2 emdash emdash-epoch phase0 300 - 1 10 -e WORKLOAD=heavy -e LANE=1 -e WINDOW=1 -e COMPRESS=1 -e SESSIONS=8 -e DURATION_S=150 -e DRAIN_S=10
+p29-light-fast-pin-r2 emdash emdash phase0 300 - 1 0 -e WORKLOAD=light -e SESSIONS=8 -e DURATION_S=150 -e DRAIN_S=10
+p29-light-fast-final-r2 emdash emdash-epoch phase0 300 - 1 0 -e WORKLOAD=light -e LANE=1 -e WINDOW=1 -e COMPRESS=1 -e SESSIONS=8 -e DURATION_S=150 -e DRAIN_S=10
+p29-light-slow-pin-r2 emdash emdash phase0 300 5mbit 1 0 -e WORKLOAD=light -e SESSIONS=8 -e DURATION_S=150 -e DRAIN_S=10
+p29-light-slow-final-r2 emdash emdash-epoch phase0 300 5mbit 1 0 -e WORKLOAD=light -e LANE=1 -e WINDOW=1 -e COMPRESS=1 -e SESSIONS=8 -e DURATION_S=150 -e DRAIN_S=10
+p29-light-cut-pin-r2 emdash emdash phase0 300 - 1 10 -e WORKLOAD=light -e SESSIONS=8 -e DURATION_S=150 -e DRAIN_S=10
+p29-light-cut-final-r2 emdash emdash-epoch phase0 300 - 1 10 -e WORKLOAD=light -e LANE=1 -e WINDOW=1 -e COMPRESS=1 -e SESSIONS=8 -e DURATION_S=150 -e DRAIN_S=10

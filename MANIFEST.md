@@ -1,0 +1,46 @@
+# Repository manifest
+
+| File | Size |
+|---|---|
+| `.gitignore` |      174 B |
+| `LICENSE` |    11395 B |
+| `README.md` |     7423 B |
+| `REPRODUCE.md` |     5234 B |
+| `REVISIONS.md` |     1011 B |
+| `data/p29-runs.csv` |     6717 B |
+| `data/p29-table.md` |     2306 B |
+| `index.html` |    48205 B |
+| `issue/FINAL-ISSUE-BODY.md` |     3395 B |
+| `issue/FINAL-ISSUE-TITLE.txt` |       57 B |
+| `method.md` |     3076 B |
+| `patches/flow-control-squashed.patch` |   334454 B |
+| `patches/flow-control.bundle` |    84773 B |
+| `patches/stale-topic-frames-ae7df3123..ac95235a1.patch` |    23796 B |
+| `proof/docker/Dockerfile` |      362 B |
+| `proof/harness/analyze.py` |     4904 B |
+| `proof/harness/background-metrics.mjs` |     2151 B |
+| `proof/harness/echo-match.mjs` |     1154 B |
+| `proof/harness/emdash-bench.ts` |    16731 B |
+| `proof/harness/fake-agent.mjs` |     3927 B |
+| `proof/scripts/link-drop.sh` |      529 B |
+| `proof/scripts/make-workspaces.sh` |     2482 B |
+| `proof/scripts/plan-p29-r1.txt` |     2142 B |
+| `proof/scripts/plan-p29-r2.txt` |     2142 B |
+| `proof/scripts/plan-p29-r3.txt` |     2142 B |
+| `proof/scripts/plan-p29-smoke.txt` |      493 B |
+| `proof/scripts/run-emdash.sh` |     1681 B |
+| `proof/scripts/run-meta.sh` |      905 B |
+| `proof/scripts/sampler.sh` |     1171 B |
+| `proof/scripts/server-entry.sh` |      894 B |
+| `proof/scripts/start-client.sh` |     1011 B |
+| `proof/scripts/start-server.sh` |     1337 B |
+| `proof/scripts/sweep2.sh` |     1198 B |
+| `results.md` |     2773 B |
+| `scripts/aggregate.py` |     1486 B |
+| `scripts/export_runs.py` |     2384 B |
+| `scripts/table_p29_from_raw.py` |     3845 B |
+| `table.md` |     2306 B |
+| `tests/stale-topic-frames.test.ts` |    17396 B |
+| `traces/README.md` |      389 B |
+| `traces/tsdown-core.jsonl` |    72811 B |
+| `traces/vitest-wire.jsonl` |   109359 B |

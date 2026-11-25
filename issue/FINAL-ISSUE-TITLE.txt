@@ -1,0 +1,1 @@
+wire: stale topic frames can affect reopened attachments

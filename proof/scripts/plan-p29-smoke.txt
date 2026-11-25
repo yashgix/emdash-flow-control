@@ -1,0 +1,4 @@
+# harness smoke only, results not used
+p29smoke-light-fast-final-r0 emdash emdash-epoch phase0 300 - 1 0 -e WORKLOAD=light -e LANE=1 -e WINDOW=1 -e COMPRESS=1 -e SESSIONS=8 -e DURATION_S=150 -e DRAIN_S=10
+p29smoke-heavy-fast-pin-r0 emdash emdash phase0 300 - 1 0 -e WORKLOAD=heavy -e SESSIONS=8 -e DURATION_S=150 -e DRAIN_S=10
+p29smoke-heavy-fast-final-r0 emdash emdash-epoch phase0 300 - 1 0 -e WORKLOAD=heavy -e LANE=1 -e WINDOW=1 -e COMPRESS=1 -e SESSIONS=8 -e DURATION_S=150 -e DRAIN_S=10
