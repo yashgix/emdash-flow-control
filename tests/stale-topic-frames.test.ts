@@ -281,6 +281,45 @@ describe('stale topic frames', () => {
   });
 });
 
+describe('stale frames outlive other attachment changes', () => {
+  async function leaveAndAbandon(h: Harness, name: string): Promise<void> {
+    const controller = new AbortController();
+    const pending = h.connection.attach(name, () => {}, { signal: controller.signal });
+    controller.abort();
+    await pending.catch(() => {});
+  }
+
+  it('still drops a stale frame after many other topics were left', async () => {
+    const h = harness();
+    const updates: LiveUpdate[] = [];
+    const detachA = await h.connection.attach(topic, () => {});
+    h.pair.serverToClient.held = true;
+    h.subscriptions[0].push(u1);
+    detachA();
+    for (let i = 0; i < 300; i++) await leaveAndAbandon(h, `other-${i}`);
+    const attachB = h.connection.attach(topic, (update) => updates.push(update));
+    h.pair.serverToClient.flush();
+    await attachB;
+    expect(updates).toEqual([]);
+    h.close();
+  });
+
+  it('still drops a stale frame after many reopen cycles of the same topic', async () => {
+    const h = harness();
+    const updates: LiveUpdate[] = [];
+    const detachA = await h.connection.attach(topic, () => {});
+    h.pair.serverToClient.held = true;
+    h.subscriptions[0].push(u1);
+    detachA();
+    for (let i = 0; i < 20; i++) await leaveAndAbandon(h, topic);
+    const attachB = h.connection.attach(topic, (update) => updates.push(update));
+    h.pair.serverToClient.flush();
+    await attachB;
+    expect(updates).toEqual([]);
+    h.close();
+  });
+});
+
 describe('topic attachment compatibility', () => {
   it('delivers unstamped legacy frames to the current attachment', async () => {
     const h = harness();
@@ -319,18 +358,38 @@ describe('topic attachment compatibility', () => {
     }
   });
 
-  it('replaces an attachment on a synthetic same-session replay', async () => {
+  it('keeps two connections on one transport sharing a topic attachment', async () => {
     const h = harness();
-    await confirmedA(h);
-    h.pair.reconnect();
-    await waitForB(h);
-    const updates: LiveUpdate[] = [];
-    await h.connection.attach(topic, (update) => updates.push(update));
-    h.subscriptions[1].push(u2);
+    const second = connect(h.pair.client, { callTimeoutMs: 0 });
+    const first: LiveUpdate[] = [];
+    const other: LiveUpdate[] = [];
+    await h.connection.attach(topic, (update) => first.push(update));
+    await second.attach(topic, (update) => other.push(update));
+    expect(h.subscriptions).toHaveLength(1);
+    h.subscriptions[0].push(u1);
 
-    expect(h.subscriptions[0].active).toBe(false);
-    expect(h.pair.clientToServer.sent.filter((m) => m.kind === 'detach')).toHaveLength(0);
-    expect(updates).toEqual([u2]);
+    expect(first).toEqual([u1]);
+    expect(other).toEqual([u1]);
+    second.dispose();
+    h.close();
+  });
+
+  it('drops a held frame stamped with a shared attachment id after one connection reopens', async () => {
+    const h = harness();
+    const second = connect(h.pair.client, { callTimeoutMs: 0 });
+    await h.connection.attach(topic, () => {});
+    const detachSecond = await second.attach(topic, () => {});
+    expect(h.subscriptions).toHaveLength(1);
+    h.pair.serverToClient.held = true;
+    h.subscriptions[0].push(u1);
+    detachSecond();
+    const updates: LiveUpdate[] = [];
+    const reopened = second.attach(topic, (update) => updates.push(update));
+    h.pair.serverToClient.flush();
+    await reopened;
+
+    expect(updates).toEqual([]);
+    second.dispose();
     h.close();
   });
 

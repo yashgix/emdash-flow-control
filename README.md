@@ -50,9 +50,9 @@ The diagram and the congestion walkthrough are under Technical details in `index
 ## A separate contribution: stale topic frames
 `update`, `topic-gap` and `topic-error` frames carry only the topic name. If a viewer closes a topic and a new viewer attaches to it while frames for the old attachment are in flight, the client applies them to the new attachment. In the tests this causes one extra snapshot resync for a stale `update` or `topic-gap`, and a log that stops updating for a stale non-retrying `topic-error`. The frozen log comes from the test harness, which injects the error through the source. In the desktop app the likely impact is the extra resync, because no log source in the current code reports a non-retrying error.
 
-The fix stamps the attach id on the three frames, and the client drops a stamped frame whose id is not its entry's current id (43 lines added, 8 removed). 14 new regression tests run the real `serve`, `connect` and `ReplicaLog` over an in-memory transport: with the fix the wire suite passes (367 tests), and on unchanged upstream 10 of the 14 fail, with 4 guards that pass on both.
+The fix stamps the attach id on the three frames and returns it in the attach result. The client remembers, per topic, the ids it has left (its own and a shared attachment's) and drops a frame stamped with one of them (69 lines added, 8 removed). Frames from a shared attachment and frames without an id behave as before, so topic sharing and detach are unchanged. 17 regression tests run the real `serve`, `connect` and `ReplicaLog` over an in-memory transport: with the fix the wire suite passes (370 tests), and on unchanged upstream 12 of the 17 fail, with the rest passing as guards. The tests include a held frame stamped with a shared attachment's id, and two delay boundaries, 300 other topics left and 20 reopen cycles of one topic. This is not complete stale-frame protection: the fix remembers at most 32 ids per topic, so a frame delayed past 32 further cycles of one topic on one connection is not recognised, and at most 4096 topics per connection, after which the ids of the least recently changed topic are evicted.
 
-One design question is left for the Emdash maintainers: whether two connections on one transport should keep sharing a topic attachment. The issue is [generalaction/emdash#3446](https://github.com/generalaction/emdash/issues/3446). Its text is in [`issue/`](issue/), the patch in [`patches/`](patches/) and the test file in [`tests/`](tests/).
+The issue is [generalaction/emdash#3446](https://github.com/generalaction/emdash/issues/3446) and the fix is [pull request #3447](https://github.com/generalaction/emdash/pull/3447). The issue text and the later update are in [`issue/`](issue/), the patch in [`patches/`](patches/) and the test file in [`tests/`](tests/).
 
 ## Evidence and walkthrough
 - `index.html`: the case study. Overview for a short read, Technical details for the architecture, method, results and the protocol walkthrough.
@@ -63,7 +63,7 @@ One design question is left for the Emdash maintainers: whether two connections 
 [`REPRODUCE.md`](REPRODUCE.md) lists the layout, the pinned checkouts, the patch, the build, the Docker setup and the commands for the 45-run experiment. It has not been run on a clean machine, and whether the results reproduce on other hardware is not verified.
 
 ## Upstream status
-The wire-protocol issue was filed as [#3446](https://github.com/generalaction/emdash/issues/3446) on 24 Nov 2026, and no pull request has been opened. The flow-control change has not been proposed to Emdash. It is a patch on Emdash `9e2942b8` (`patches/flow-control-squashed.patch`, with a git bundle). Open upstream pull request [#3444](https://github.com/generalaction/emdash/pull/3444) changes some of the same files (`host-runtime-connection.ts`, `follower.ts`), so the flow-control patch would need rebasing. The same pull request adds an optional `onActivity` hook to `WireTransport` in `protocol.ts`, a different part of the file from the stale-frame fix.
+The wire-protocol issue is [#3446](https://github.com/generalaction/emdash/issues/3446) and its fix is open as [pull request #3447](https://github.com/generalaction/emdash/pull/3447). The flow-control results are posted on [#3426](https://github.com/generalaction/emdash/issues/3426) with a question about one PR or a split, and no pull request is open yet. The flow-control change is a patch on Emdash `9e2942b8` (`patches/flow-control-squashed.patch`, with a git bundle). Open upstream pull request [#3444](https://github.com/generalaction/emdash/pull/3444) changes some of the same files (`host-runtime-connection.ts`, `follower.ts`), so the flow-control patch would need rebasing. The same pull request adds an optional `onActivity` hook to `WireTransport` in `protocol.ts`, a different part of the file from the stale-frame fix.
 
 ## Files
 | Path | What |
@@ -73,13 +73,13 @@ The wire-protocol issue was filed as [#3446](https://github.com/generalaction/em
 | `data/` | per-run CSV and the table built from it |
 | `scripts/` | `aggregate.py`, `export_runs.py`, `table_p29_from_raw.py` (the last two need the raw logs, which are not published) |
 | `proof/` | benchmark harness, scripts, plans and Docker image |
-| `patches/` | flow-control patch and bundle, and the stale-frames patch |
-| `tests/` | the 14 regression tests for the stale-frames fix |
+| `patches/` | flow-control patch and bundle, a copy of the flow-control patch rebased onto upstream `c8769892f` (`flow-control-on-main.patch`, apply with `git apply --3way`), and the stale-frames patch |
+| `tests/` | the 17 regression tests for the stale-frames fix |
 | `issue/` | title and body of the wire-protocol issue |
 | `traces/` | two sample recorded traces |
 
 ## Licence
-Emdash is Apache License 2.0, Copyright 2026 General Action, Inc. (`LICENSE`). The patches derive from that code and keep that licence, and the harness, scripts and text are also Apache 2.0. The flow-control patch extends upstream's existing pnpm patch for `ssh2` (MIT), which stays under its own licence.
+Emdash is Apache License 2.0, Copyright 2026 General Action, Inc. (`LICENSE`). The patches derive from that code and keep that licence, and the harness, scripts and text are also Apache 2.0. The page uses Inter (SIL Open Font License 1.1, The Inter Project Authors) and Commit Mono (SIL Open Font License 1.1, Eigil Nikolajsen), self-hosted from the Fontsource packages, with the licences in `fonts/`. The flow-control patch extends upstream's existing pnpm patch for `ssh2` (MIT), which stays under its own licence.
 
 ## Author
 Yash Gupta · [GitHub](https://github.com/yashgix) · [LinkedIn](https://www.linkedin.com/in/yash-guptaix/)

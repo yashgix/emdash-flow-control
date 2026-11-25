@@ -6,9 +6,12 @@
 <title>Emdash terminal flow control</title>
 <meta name="description" content="Keeping typing responsive in a busy remote terminal: measured results, architecture and a separate wire-protocol fix for the Emdash desktop app.">
 <style>
-:root{--bg:#faf9f7;--surface:#fff;--sunk:#f1efeb;--line:rgba(20,20,20,.13);--fg:#161616;--mut:#595959;--acc:#a4443a;--acc-soft:rgba(164,68,58,.1);--grey:#7a7a7a;--grey2:#c4c4c4;--sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;--mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;color-scheme:light}
-@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#0b0b0c;--surface:#131315;--sunk:#0f0f10;--line:rgba(255,255,255,.12);--fg:#f2f2f2;--mut:#a3a3a3;--acc:#d9776b;--acc-soft:rgba(217,119,107,.13);--grey:#7d7d7d;--grey2:#4a4a4a;color-scheme:dark}}
-:root[data-theme=dark]{--bg:#0b0b0c;--surface:#131315;--sunk:#0f0f10;--line:rgba(255,255,255,.12);--fg:#f2f2f2;--mut:#a3a3a3;--acc:#d9776b;--acc-soft:rgba(217,119,107,.13);--grey:#7d7d7d;--grey2:#4a4a4a;color-scheme:dark}
+@font-face{font-family:Inter;font-style:normal;font-weight:100 900;font-display:swap;src:url(fonts/Inter-latin-variable.woff2) format('woff2')}
+@font-face{font-family:'Commit Mono';font-style:normal;font-weight:400;font-display:swap;src:url(fonts/CommitMono-latin-400.woff2) format('woff2')}
+@font-face{font-family:'Commit Mono';font-style:normal;font-weight:500;font-display:swap;src:url(fonts/CommitMono-latin-500.woff2) format('woff2')}
+:root{--bg:#fff;--surface:#fafbfb;--sunk:#f3f4f5;--line:#e8ebee;--fg:#0a0a0a;--mut:#4b5a5f;--acc:#a4443a;--acc-fill:#c26157;--acc-soft:rgba(194,97,87,.1);--grey:#7a8286;--grey2:#c9ced1;--sans:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;--mono:"Commit Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#0b0b0c;--surface:#111214;--sunk:#0e0f10;--line:#283336;--fg:#f5f5f5;--mut:#a3a8ab;--acc:#d27468;--acc-fill:#c26157;--acc-soft:rgba(194,97,87,.14);--grey:#7b8387;--grey2:#44504f;color-scheme:dark}}
+:root[data-theme=dark]{--bg:#0b0b0c;--surface:#111214;--sunk:#0e0f10;--line:#283336;--fg:#f5f5f5;--mut:#a3a8ab;--acc:#d27468;--acc-fill:#c26157;--acc-soft:rgba(194,97,87,.14);--grey:#7b8387;--grey2:#44504f;color-scheme:dark}
 *{box-sizing:border-box}
 html{scroll-behavior:smooth;scroll-padding-top:72px}
 body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 var(--sans);-webkit-font-smoothing:antialiased}
@@ -26,12 +29,13 @@ header.top .wrap{display:flex;align-items:center;gap:14px;height:56px}
 .icon{font:500 12px var(--mono);color:var(--mut);background:none;border:1px solid var(--line);border-radius:999px;padding:6px 11px;cursor:pointer}
 .icon:hover{color:var(--fg)}
 .eyebrow{font:500 12px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--acc);margin:0 0 14px}
-h1{font-weight:500;font-size:clamp(1.9rem,4.4vw,3rem);line-height:1.12;letter-spacing:-.025em;margin:0 0 18px;max-width:20ch}
+h1{font-weight:500;font-size:clamp(1.5rem,3vw,2rem);line-height:1.2;letter-spacing:-.025em;margin:0 0 12px;max-width:30ch}.hero-num{display:flex;align-items:baseline;flex-wrap:wrap;gap:6px 14px;font-weight:500;font-size:clamp(2.6rem,8vw,4.6rem);line-height:1.05;letter-spacing:-.04em;margin:0 0 6px}.hero-num .a{color:var(--mut)}.hero-num .m{color:var(--mut);font-size:.55em;font-weight:400}.hero-num .g{color:var(--fg)}.hero-num .g b{color:var(--acc-fill);font-weight:500}.hero-cap{font:400 12px var(--mono);letter-spacing:.04em;color:var(--mut);margin:0 0 30px;text-transform:uppercase}
 h2{font-weight:600;font-size:1.45rem;letter-spacing:-.015em;margin:0 0 12px;line-height:1.25}
 h3{font-weight:600;font-size:1.02rem;margin:26px 0 6px}
-p{margin:0 0 14px}.lede{font-size:1.12rem;color:var(--mut);max-width:62ch}.mut{color:var(--mut)}
+p{margin:0 0 14px}.lede{font-size:1.05rem;color:var(--mut);max-width:58ch}.mut{color:var(--mut)}
 section.block{padding:44px 0;border-top:1px solid var(--line)}
 section.hero{padding:56px 0 40px}
+.block>p,.block>ul,.block>ol,.block>h3{max-width:46rem}
 .stats{display:grid;grid-template-columns:1fr;gap:12px;margin:30px 0 8px}
 @media(min-width:560px){.stats{grid-template-columns:1fr 1fr}}@media(min-width:1000px){.stats{grid-template-columns:repeat(4,1fr)}}
 .stat{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px}
@@ -40,7 +44,7 @@ section.hero{padding:56px 0 40px}
 .cta{display:flex;flex-wrap:wrap;gap:10px;margin-top:22px}
 .btn{display:inline-block;font:500 14px var(--sans);text-decoration:none;border-radius:999px;padding:9px 18px;border:1px solid var(--line);color:var(--fg);background:none;cursor:pointer}
 .btn.p{background:var(--fg);color:var(--bg);border-color:var(--fg)}
-.callout{border-left:3px solid var(--acc);background:var(--acc-soft);border-radius:0 10px 10px 0;padding:12px 16px;margin:18px 0}
+.callout{border-left:3px solid var(--acc-fill);background:var(--acc-soft);border-radius:0 10px 10px 0;padding:12px 16px;margin:18px 0}
 .callout p:last-child{margin:0}
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px}
 .label{font:500 11px var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--mut)}
@@ -54,17 +58,17 @@ section.hero{padding:56px 0 40px}
 .lane .head b{font-weight:600}.lane .head span{color:var(--mut);font-family:var(--mono);font-size:12px}
 .track{position:relative;height:14px;background:var(--sunk);border:1px solid var(--line);border-radius:999px;overflow:hidden}
 .track i{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--grey);border-radius:999px}
-.lane.me .track i{background:var(--acc)}
+.lane.me .track i{background:var(--acc-fill)}
 .track u{position:absolute;top:-1px;bottom:-1px;width:2px;background:var(--fg);opacity:.6}
 .rowlbl{display:flex;justify-content:space-between;font:12px var(--mono);color:var(--mut)}
 .note{font-size:.86rem;color:var(--mut)}
 .explain{display:grid;gap:12px;margin-top:6px}@media(min-width:760px){.explain{grid-template-columns:1fr 1.3fr}}
 .chips{display:flex;gap:3px;flex-wrap:nowrap;overflow:hidden;margin:6px 0}
-.chip{height:18px;border-radius:4px;background:var(--grey2);flex:0 0 auto}.chip.k{background:var(--acc);width:18px}
+.chip{height:18px;border-radius:4px;background:var(--grey2);flex:0 0 auto}.chip.k{background:var(--acc-fill);width:18px}
 .bars{display:grid;gap:12px;margin:12px 0}
 .bar{display:grid;grid-template-columns:104px 1fr 64px;gap:8px;align-items:center;font-size:.88rem;margin-top:7px}
 .bar .t{background:var(--sunk);border-radius:999px;height:11px}.bar .t i{display:block;height:11px;border-radius:999px;background:var(--grey)}
-.bar.me .t i{background:var(--acc)}.bar em{font-style:normal;text-align:right;font-family:var(--mono);font-size:12px}
+.bar.me .t i{background:var(--acc-fill)}.bar em{font-style:normal;text-align:right;font-family:var(--mono);font-size:12px}
 table{border-collapse:collapse;width:100%;font-size:.88rem;display:block;overflow-x:auto}
 th,td{border-bottom:1px solid var(--line);padding:7px 10px;text-align:right;white-space:nowrap}th:first-child,td:first-child,th:nth-child(2),td:nth-child(2){text-align:left}
 th{font:500 11px var(--mono);letter-spacing:.05em;text-transform:uppercase;color:var(--mut)}
@@ -106,6 +110,8 @@ footer p{margin:0 0 6px}
 <div id="o" role="tabpanel" aria-labelledby="tab-o"><div class="wrap">
 <section class="hero">
 <p class="eyebrow">Case study · Emdash remote terminals</p>
+<div class="hero-num" role="text" aria-label="p95 typing echo, 9.0 seconds before, 0.48 seconds after"><span class="a">9.0 s</span><span class="m">to</span><span class="g"><b>0.48 s</b></span></div>
+<p class="hero-cap">p95 typing echo · fast link · 8 busy terminals · upstream, then modified</p>
 <h1>Keeping typing responsive in a busy remote terminal</h1>
 <p class="lede">Emdash runs coding agents on remote machines over SSH. When several terminals print a lot of output, the keys you type wait behind it, and on a slow link the p95 echo latency was 9 to 11 seconds. This project changes how Emdash sends terminal output so typing stays close to the network delay, and measures what that costs.</p>
 <div class="stats">
@@ -148,12 +154,12 @@ footer p{margin:0 0 6px}
 
 <section class="block" id="protocol-teaser">
 <h2>A separate fix in the wire protocol</h2>
-<p>While reading the protocol code, a different bug turned up. Frames sent for a closed topic can be applied to a reopened one. It has its own issue (<a href="https://github.com/generalaction/emdash/issues/3446">#3446</a>), tests and fix, and it is independent of the results above. In the tests the effect is one extra snapshot resync, and in one case a log that stops updating. In the desktop app the likely impact is the extra resync. <button class="btn" style="padding:3px 12px" data-tab="t" data-go="protocol">Open the walkthrough</button></p>
+<p>While reading the protocol code, a different bug turned up. Frames sent for a closed topic can be applied to a reopened one. It has its own issue (<a href="https://github.com/generalaction/emdash/issues/3446">#3446</a>), tests and fix (<a href="https://github.com/generalaction/emdash/pull/3447">#3447</a>), and it is independent of the results above. In the tests the effect is one extra snapshot resync, and in one case a log that stops updating. In the desktop app the likely impact is the extra resync. <button class="btn" style="padding:3px 12px" data-tab="t" data-go="protocol">Open the walkthrough</button></p>
 </section>
 
 <section class="block" id="status">
 <h2>Status</h2>
-<p>The wire-protocol issue was filed upstream as <a href="https://github.com/generalaction/emdash/issues/3446">#3446</a>, and no pull request has been opened. The flow-control change has not been proposed to Emdash. It is a patch on Emdash <code>9e2942b8</code>, and an open upstream pull request, <a href="https://github.com/generalaction/emdash/pull/3444">#3444</a>, changes some of the same files. The same pull request adds an optional <code>onActivity</code> hook to <code>WireTransport</code> in <code>protocol.ts</code>, a different part of the file from the stale-frame fix.</p>
+<p>The wire-protocol issue is <a href="https://github.com/generalaction/emdash/issues/3446">#3446</a> and its fix is open as <a href="https://github.com/generalaction/emdash/pull/3447">pull request #3447</a>. The flow-control results are posted on <a href="https://github.com/generalaction/emdash/issues/3426">issue #3426</a> with a question about how to submit them, and no pull request is open yet. The flow-control change is a patch on Emdash <code>9e2942b8</code>, and an open upstream pull request, <a href="https://github.com/generalaction/emdash/pull/3444">#3444</a>, changes some of the same files. The same pull request adds an optional <code>onActivity</code> hook to <code>WireTransport</code> in <code>protocol.ts</code>, a different part of the file from the stale-frame fix.</p>
 <p class="mut">The numbers come from one machine with emulated links and real commands. Technical details lists what that does and does not show.</p>
 </section>
 </div></div>
@@ -255,14 +261,14 @@ footer p{margin:0 0 6px}
 <div class="timeline-ctl"><button class="btn" id="prev">Back</button><button class="btn p" id="next">Next step</button><button class="btn" id="replay">Restart</button><span class="note" id="stepNo"></span></div>
 <div class="outcome" id="stepText" aria-live="polite"></div>
 <h3>The fix</h3>
-<p>The server stamps the attach request id on the three frames as an optional <code>attachId</code>, and the client drops a stamped frame whose id is not its entry's current id. Unstamped frames behave as before, so old and new peers still talk to each other, although an old server gets no protection. The change is 43 lines added and 8 removed in <code>protocol.ts</code>, <code>serve.ts</code> and <code>connect.ts</code>. The branch also makes the server replace its attachment when an attach with a different id arrives for the same topic.</p>
+<p>The server stamps the attach request id on the three frames as an optional <code>attachId</code>, and returns it in the attach result. The client remembers, per topic, the ids it has left and drops a frame stamped with one of them. That covers its own attach id and, for a shared attachment, the id the server reported. Frames without an id, and frames from a shared attachment, behave as before, so old and new peers still talk to each other, although an old server gets no protection. The change is 69 lines added and 8 removed in <code>protocol.ts</code>, <code>serve.ts</code> and <code>connect.ts</code>.</p>
 <h3>Regression tests</h3>
-<p>14 new tests in <code>stale-topic-frames.test.ts</code> run the real <code>serve</code>, <code>connect</code>, <code>LiveLogSource</code> and <code>ReplicaLog</code> over an in-memory transport whose server-to-client direction can be held and released in order. With the fix, the wire suite passes (367 tests). On unchanged upstream 10 of the 14 fail, and the other 4 are guards that pass on both.</p>
+<p>17 new tests in <code>stale-topic-frames.test.ts</code> run the real <code>serve</code>, <code>connect</code>, <code>LiveLogSource</code> and <code>ReplicaLog</code> over an in-memory transport whose server-to-client direction can be held and released in order. With the fix the wire suite passes (370 tests). On unchanged upstream 12 of the 17 fail, and the rest are guards that pass on both, including one that two connections still share a topic attachment. One test holds a frame stamped with the shared attachment's id, reopens the topic through the second connection and checks the frame is dropped. Two tests cover how long a stale frame can be delayed: one leaves 300 other topics and one reopens the same topic 20 times before the old frame arrives. A first version kept a single set of 256 ids for the whole connection, and the first of those two tests showed that leaving 300 other topics could evict an id while its frame was still in flight. The ids are now kept per topic.</p>
 <h3>What the frozen log means</h3>
 <p>The frozen log comes from the test harness, which injects the error through the source. In the desktop app the likely impact is the extra snapshot resync, because no log source in the current code reports a non-retrying error. This is separate from #3426.</p>
-<h3>Open question for the maintainers</h3>
-<p>Should two connections on one transport keep sharing a topic attachment? Today the server keeps one attachment per topic and both connections receive its frames. Replacing the attachment changes that, and a later topic-only detach from the replaced connection could remove the replacement. If sharing should stay, the server can keep its behavior and each client can drop only the ids it abandoned itself.</p>
-<p>The issue is <a href="https://github.com/generalaction/emdash/issues/3446">generalaction/emdash#3446</a>. Its text is <a href="https://github.com/yashgix/emdash-flow-control/blob/main/issue/FINAL-ISSUE-BODY.md">issue/FINAL-ISSUE-BODY.md</a>, the test file is <a href="https://github.com/yashgix/emdash-flow-control/blob/main/tests/stale-topic-frames.test.ts">tests/stale-topic-frames.test.ts</a> and the patch is <a href="https://github.com/yashgix/emdash-flow-control/blob/main/patches/stale-topic-frames-ae7df3123..ac95235a1.patch">patches/stale-topic-frames-ae7df3123..ac95235a1.patch</a>.</p>
+<h3>Topic sharing is unchanged</h3>
+<p>Two connections on one transport still share one server attachment. A frame stamped with the other connection's id is delivered, and a detach still removes the shared attachment as before.</p>
+<p>The issue is <a href="https://github.com/generalaction/emdash/issues/3446">generalaction/emdash#3446</a> and the pull request is <a href="https://github.com/generalaction/emdash/pull/3447">#3447</a>. The issue text is <a href="https://github.com/yashgix/emdash-flow-control/blob/main/issue/FINAL-ISSUE-BODY.md">issue/FINAL-ISSUE-BODY.md</a>, the test file is <a href="https://github.com/yashgix/emdash-flow-control/blob/main/tests/stale-topic-frames.test.ts">tests/stale-topic-frames.test.ts</a> and the patch is <a href="https://github.com/yashgix/emdash-flow-control/blob/main/patches/stale-frames-sharing.patch">patches/stale-frames-sharing.patch</a>.</p>
 </section>
 
 <section class="block" id="limits">
@@ -274,6 +280,7 @@ footer p{margin:0 0 6px}
 <li>No real coding agent or real remote host was used.</li>
 <li>Link-cut recovery time could be measured in only one run, so it is not reported.</li>
 <li>An earlier comparison on replayed recorded output (6 network conditions) pointed the same way. In 3 of those conditions upstream did not finish session setup in the harness, which shows a limit of the harness, not that the app crashes.</li>
+<li>The wire fix does not give complete stale-frame protection, because nothing in the protocol bounds how long a queued frame can wait. It remembers at most 32 left ids per topic, so a frame delayed past 32 further attach and detach cycles of the same topic on one connection is not recognised. It remembers at most 4096 topics per connection, so after that the ids of the least recently changed topic are evicted and a stale frame for it is not recognised.</li>
 <li>Reproducing the results on a clean machine, and the relative performance on other hardware, are not verified.</li>
 </ul>
 </section>
@@ -358,9 +365,9 @@ const KINDS=[{id:'update',name:'update'},{id:'topic-gap',name:'topic-gap'},{id:'
 const FIX=[{id:'n',name:'Without the fix'},{id:'y',name:'With the fix'}];
 const pk=seg($('#kindSeg'),KINDS,()=>kind,v=>{kind=v;step=0;seq()});
 const pf=seg($('#fixSeg'),FIX,()=>fixed?'y':'n',v=>{fixed=v==='y';step=0;seq()});
-const RESULT={update:['The new viewer receives an update from the old attachment. Its sequence check fails, so it takes one extra snapshot resync. The text stays correct.','The update carries id a1 and the entry has id a2, so the client drops it.'],
-'topic-gap':['The gap fires the new viewer\'s reattach callback, which causes one extra snapshot resync. The text stays correct.','The gap carries id a1 and the entry has id a2, so the client drops it.'],
-'topic-error':['The client deletes the new viewer\'s entry. In the test the log keeps its old text and the output that follows never arrives. The error is injected through the source, because no source in the current app reports one for a log topic.','The error carries id a1 and the entry has id a2, so the client drops it and keeps the entry.']};
+const RESULT={update:['The new viewer receives an update from the old attachment. Its sequence check fails, so it takes one extra snapshot resync. The text stays correct.','The update carries id a1, which the client left, so it drops the frame.'],
+'topic-gap':['The gap fires the new viewer\'s reattach callback, which causes one extra snapshot resync. The text stays correct.','The gap carries id a1, which the client left, so it drops the frame.'],
+'topic-error':['The client deletes the new viewer\'s entry. In the test the log keeps its old text and the output that follows never arrives. The error is injected through the source, because no source in the current app reports one for a log topic.','The error carries id a1, which the client left, so it drops the frame and keeps the entry.']};
 const narrow=matchMedia('(max-width:720px)');narrow.addEventListener('change',()=>seq());
 function seq(){const N=narrow.matches;const stamp=fixed?' (a1)':'';const lbl=kind+stamp;const sx=N?70:150,cx=N?290:750,mid=(sx+cx)/2,fs=N?13:13;const gap=N?64:50;
 const msgs=[{y:38,dir:1,t:'attach topic (a1)',show:1},{y:38+gap,dir:-1,t:lbl+' sent for A',show:2,dash:true},{y:38+2*gap,dir:1,t:'detach, then attach (a2)',show:3},{y:38+3*gap,dir:-1,t:lbl+' arrives',show:4}];
@@ -372,7 +379,7 @@ msgs.forEach(m=>{if(step<m.show)return;const x1=m.dir>0?cx:sx,x2=m.dir>0?sx:cx;c
 s+=`<path class="${cls}" d="M${x1} ${y}H${x2}" marker-end="url(#a2)"/><text x="${mid}" y="${y-8}" text-anchor="middle" font-size="${fs}">${m.t}</text>`});
 if(step>=3){const bx=N?120:620,bw=N?230:260,by=N?H-70:228;s+=`<rect class="box acc" x="${bx}" y="${by}" width="${bw}" height="52" rx="8"/><text class="m" x="${bx+bw/2}" y="${by+20}" text-anchor="middle" font-size="${N?12.5:11.5}">client entry for the topic</text><text x="${bx+bw/2}" y="${by+39}" text-anchor="middle" font-size="${N?13.5:13}">viewer B, attach id a2</text>`}
 $('#seq').innerHTML=s;
-const T=['Start. Viewer A is about to attach a topic.','Viewer A attaches. The server subscribes and the client entry has attach id a1.','The server produces a '+kind+' frame for A. It is now in flight to the client.','A closes and viewer B attaches the same topic. The client entry now has attach id a2, and the old frame is still in flight.','The old frame arrives.'];
+const T=['Start. Viewer A is about to attach a topic.','Viewer A attaches. The server subscribes and the client entry has attach id a1.','The server produces a '+kind+' frame for A. It is now in flight to the client.','A closes, so the client remembers it left a1, and viewer B attaches the same topic (a2). The old frame is still in flight.','The old frame arrives.'];
 $('#stepNo').textContent='Step '+step+' of 4';let h='<p>'+T[step]+'</p>';
 if(step===4){h=`<p>${T[4]}</p><p><b>${fixed?'With the fix':'Without the fix'}:</b> ${fixed?RESULT[kind][1]:RESULT[kind][0]}</p>`}
 const o=$('#stepText');o.innerHTML=h;o.className='outcome'+(step===4&&!fixed&&kind==='topic-error'?' bad':'');
