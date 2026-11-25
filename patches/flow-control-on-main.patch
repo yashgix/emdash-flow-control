@@ -1,7 +1,7 @@
 From 527d1a26a20aa85361b07b58695a1f0ff6d881cd Mon Sep 17 00:00:00 2001
 From: yashgix <125082291+yashgix@users.noreply.github.com>
 Date: Tue, 24 Nov 2026 23:25:03 -0500
-Subject: [PATCH] feat(remote): keep typing responsive under bulk terminal
+Subject: [PATCH 1/3] feat(remote): keep typing responsive under bulk terminal
  output on SSH hosts
 
 Adds an interactive lane, an adaptive bulk window, per-viewer credit accounting, backpressure to the PTY, a bounded outbound queue and attachment identity for reconnects.
@@ -9388,6 +9388,532 @@ index 84ed35351..cd6d9e10a 100644
      dependencies:
        asn1: 0.2.6
        bcrypt-pbkdf: 1.0.2
+-- 
+2.52.0
+
+
+From 0c913e046aae3ba4f4e1ff65d74d2f7db8bfc544 Mon Sep 17 00:00:00 2001
+From: yashgix <125082291+yashgix@users.noreply.github.com>
+Date: Wed, 25 Nov 2026 00:09:02 -0500
+Subject: [PATCH 2/3] fix(wire): count credit for updates that arrive with the
+ attach result
+
+The attach result and the first flow updates can arrive in one chunk, before the result
+is handled and the credit window is configured. Those updates reached the viewer but were
+never counted, so the server did not get their credit back and a startup burst that filled
+the window could stall output. They are now counted and carried over when the result is
+handled. The count starts from zero on every attach, and a peer without a window sends no credit.
+---
+ packages/wire/src/api/connect.ts            |  23 +++-
+ packages/wire/src/api/credit-client.test.ts | 117 +++++++++++++++++++-
+ 2 files changed, 135 insertions(+), 5 deletions(-)
+
+diff --git a/packages/wire/src/api/connect.ts b/packages/wire/src/api/connect.ts
+index 6b4c78ccc..c50d78202 100644
+--- a/packages/wire/src/api/connect.ts
++++ b/packages/wire/src/api/connect.ts
+@@ -102,6 +102,8 @@ type Attachment = {
+   attemptAbort: AbortController | null;
+   attachId: string | undefined;
+   credit: AttachmentCredit | undefined;
++  /** Credit for flow updates that arrived before the attach result configured `credit`. */
++  earlyCredit: number;
+   pressures: Map<PressureSignal, AttachmentPressure>;
+   pressureDirty: boolean;
+ };
+@@ -791,6 +793,7 @@ export function connect(transport: WireTransport, options: ConnectOptions = {}):
+       onReattachError: new Set(),
+       established: Promise.resolve(),
+       credit: undefined,
++      earlyCredit: 0,
+       pressures: new Map(),
+       pressureDirty: false,
+       establishedSettled: true,
+@@ -840,7 +843,7 @@ export function connect(transport: WireTransport, options: ConnectOptions = {}):
+       { signal: attemptAbort.signal }
+     ).then((attachResult) => {
+       if (attachments.get(topic) !== entry || entry.attempt !== attempt) return;
+-      configureAttachmentCredit(entry, attachResult);
++      configureAttachmentCredit(topic, entry, attachResult);
+     });
+     established.then(
+       () => {
+@@ -919,6 +922,7 @@ export function connect(transport: WireTransport, options: ConnectOptions = {}):
+   function resetAttachmentCredit(entry: Attachment): void {
+     cancelCreditTimer(entry.credit);
+     entry.credit = undefined;
++    entry.earlyCredit = 0;
+   }
+ 
+   function resetAttachmentPressures(entry: Attachment): void {
+@@ -988,15 +992,26 @@ export function connect(transport: WireTransport, options: ConnectOptions = {}):
+     if (credit) credit.timer = undefined;
+   }
+ 
+-  function configureAttachmentCredit(entry: Attachment, attachResult: unknown): void {
++  function configureAttachmentCredit(
++    topic: string,
++    entry: Attachment,
++    attachResult: unknown
++  ): void {
++    const early = entry.earlyCredit;
++    entry.earlyCredit = 0;
+     const window = (attachResult as { window?: unknown } | undefined)?.window;
+     if (typeof window !== 'number' || !Number.isFinite(window) || window < 0) return;
+-    entry.credit = { window, consumed: 0, lastReported: 0, timer: undefined };
++    entry.credit = { window, consumed: early, lastReported: 0, timer: undefined };
++    scheduleCreditReport(topic, entry);
+   }
+ 
+   function recordCredit(entry: Attachment, topic: string, update: LiveUpdate): void {
+     const credit = entry.credit;
+-    if (!credit) return;
++    if (!credit) {
++      // The result and the first updates can arrive in one chunk, before the result is handled.
++      entry.earlyCredit += creditSize(update);
++      return;
++    }
+     credit.consumed += creditSize(update);
+     scheduleCreditReport(topic, entry);
+   }
+diff --git a/packages/wire/src/api/credit-client.test.ts b/packages/wire/src/api/credit-client.test.ts
+index ff0104216..ebe9fc1fb 100644
+--- a/packages/wire/src/api/credit-client.test.ts
++++ b/packages/wire/src/api/credit-client.test.ts
+@@ -53,16 +53,24 @@ class TestTransport implements WireTransport {
+   private readonly disconnectListeners = new Set<() => void>();
+   private readonly reconnectListeners = new Set<() => void>();
+ 
+-  constructor(private readonly attachResult: unknown = undefined) {}
++  /** `early[n]` is delivered in the same chunk as the result of the n-th attach. */
++  constructor(
++    private readonly attachResult: unknown = undefined,
++    private readonly early: WireMessage[][] = []
++  ) {}
+ 
+   post(message: WireMessage): void {
+     this.sent.push(message);
+     if (message.kind === 'attach') {
+       const result = this.attachResult;
++      const early = this.early.shift() ?? [];
+       queueMicrotask(() => {
+         for (const listener of this.messageListeners) {
+           listener({ kind: 'result', id: message.id, ok: true, value: result });
+         }
++        for (const frame of early) {
++          for (const listener of this.messageListeners) listener(frame);
++        }
+       });
+     }
+   }
+@@ -283,3 +291,110 @@ describe('connect credit client', () => {
+     pair.disconnect();
+   });
+ });
++
++describe('connect credit for updates that arrive with the attach result', () => {
++  const flowUpdate = (sequence: number): WireMessage => ({
++    kind: 'update',
++    topic: 'items',
++    update: update(sequence),
++    flow: true,
++  });
++
++  it('reports credit for updates delivered in the same chunk as the result', async () => {
++    const transport = new TestTransport({ window: WINDOW }, [[flowUpdate(0), flowUpdate(1)]]);
++    const pushed: LiveUpdate[] = [];
++    const connection = connect(transport, { creditWindow: WINDOW, clock: new ManualClock() });
++
++    await connection.attach('items', (item) => pushed.push(item));
++    await flush();
++
++    expect(pushed).toHaveLength(2);
++    expect(transport.topicCreditMessages.at(-1)).toMatchObject({
++      topic: 'items',
++      consumed: 2 * SIZE,
++    });
++    connection.dispose();
++  });
++
++  it('does not count those updates twice', async () => {
++    const transport = new TestTransport({ window: WINDOW }, [
++      [flowUpdate(0), flowUpdate(1), flowUpdate(2)],
++    ]);
++    const clock = new ManualClock();
++    const connection = connect(transport, { creditWindow: WINDOW, clock });
++    await connection.attach('items', () => {});
++    await flush();
++
++    transport.emit(flowUpdate(3));
++    await flush();
++    clock.advance(CREDIT_IDLE_MS);
++
++    expect(transport.topicCreditMessages.at(-1)).toMatchObject({ consumed: 4 * SIZE });
++    connection.dispose();
++  });
++
++  it('returns the credit of a startup burst that fills the window', async () => {
++    const burst = Array.from({ length: 8 }, (_, index) => flowUpdate(index));
++    const transport = new TestTransport({ window: WINDOW }, [burst]);
++    const clock = new ManualClock();
++    const connection = connect(transport, { creditWindow: WINDOW, clock });
++    await connection.attach('items', () => {});
++    await flush();
++
++    expect(transport.topicCreditMessages.at(-1)).toMatchObject({ consumed: WINDOW });
++    transport.emit(flowUpdate(8));
++    await flush();
++    clock.advance(CREDIT_IDLE_MS);
++    expect(transport.topicCreditMessages.at(-1)).toMatchObject({ consumed: WINDOW + SIZE });
++    connection.dispose();
++  });
++
++  it('starts from zero again after a reconnect', async () => {
++    const transport = new TestTransport({ window: WINDOW }, [[flowUpdate(0), flowUpdate(1)], []]);
++    const clock = new ManualClock();
++    const connection = connect(transport, { creditWindow: WINDOW, clock });
++    await connection.attach('items', () => {});
++    await flush();
++    transport.sent.length = 0;
++
++    transport.reconnect();
++    await waitFor(() => transport.attachMessages.length === 1);
++    await flush();
++    transport.emit(flowUpdate(0));
++    await flush();
++    clock.advance(CREDIT_IDLE_MS);
++
++    expect(transport.topicCreditMessages.at(-1)).toMatchObject({ consumed: SIZE });
++    connection.dispose();
++  });
++
++  it('ignores such updates when the attach was cancelled', async () => {
++    const transport = new TestTransport({ window: WINDOW }, [[flowUpdate(0), flowUpdate(1)]]);
++    const pushed: LiveUpdate[] = [];
++    const connection = connect(transport, { creditWindow: WINDOW, clock: new ManualClock() });
++    const controller = new AbortController();
++
++    const cancelled = connection.attach('items', (item) => pushed.push(item), {
++      signal: controller.signal,
++    });
++    controller.abort();
++    await cancelled.catch(() => {});
++    await flush();
++
++    expect(pushed).toEqual([]);
++    expect(transport.topicCreditMessages).toHaveLength(0);
++    connection.dispose();
++  });
++
++  it('sends no credit to a peer whose result has no window', async () => {
++    const transport = new TestTransport(undefined, [[flowUpdate(0), flowUpdate(1)]]);
++    const clock = new ManualClock();
++    const connection = connect(transport, { creditWindow: WINDOW, clock });
++    await connection.attach('items', () => {});
++    await flush();
++    clock.advance(CREDIT_IDLE_MS);
++
++    expect(transport.topicCreditMessages).toHaveLength(0);
++    connection.dispose();
++  });
++});
+-- 
+2.52.0
+
+
+From 28854ae87949c96355b34ac862f1581a934f2706 Mon Sep 17 00:00:00 2001
+From: yashgix <125082291+yashgix@users.noreply.github.com>
+Date: Wed, 25 Nov 2026 00:09:02 -0500
+Subject: [PATCH 3/3] fix(remote): honor cancellation and deadlines of queued
+ interactive input
+
+Input queued while the lane is disconnected now watches its abort signal and its explicit
+timeout from the moment it is queued. A cancelled or expired input is rejected, frees its
+slot in the buffer and is not replayed, and a later attempt gets only the remaining timeout.
+The timer and the abort listener are released when the input settles or the connection is disposed.
+---
+ .../hosts/node/interactive-lane.test.ts       | 137 +++++++++++++++++-
+ .../services/hosts/node/interactive-lane.ts   |  63 +++++++-
+ 2 files changed, 194 insertions(+), 6 deletions(-)
+
+diff --git a/apps/emdash-desktop/src/core/services/hosts/node/interactive-lane.test.ts b/apps/emdash-desktop/src/core/services/hosts/node/interactive-lane.test.ts
+index 3dac415f8..40de342c8 100644
+--- a/apps/emdash-desktop/src/core/services/hosts/node/interactive-lane.test.ts
++++ b/apps/emdash-desktop/src/core/services/hosts/node/interactive-lane.test.ts
+@@ -14,6 +14,7 @@ import { ACTIVE_IDLE_MS, interactiveLaneConnection, MOVE_RETRY_MS } from './inte
+ type Call = {
+   path: string;
+   input: Record<string, unknown>;
++  options?: { signal?: AbortSignal; timeoutMs?: number };
+   resolve(value?: unknown): void;
+   reject(error: Error): void;
+ };
+@@ -39,9 +40,15 @@ class FakeConnection {
+   }> = [];
+ 
+   readonly connection = {
+-    call: (path: string, input: unknown) =>
++    call: (path: string, input: unknown, options?: Call['options']) =>
+       new Promise((resolve, reject) => {
+-        this.calls.push({ path, input: input as Record<string, unknown>, resolve, reject });
++        this.calls.push({
++          path,
++          input: input as Record<string, unknown>,
++          options,
++          resolve,
++          reject,
++        });
+       }),
+     snapshot: async () => {
+       const captured = this.snapshotData;
+@@ -449,3 +456,129 @@ describe('interactiveLaneConnection input replay', () => {
+     await expect(sent).rejects.toThrow('boom');
+   });
+ });
++
++describe('interactiveLaneConnection input while the lane is disconnected', () => {
++  const key = (
++    connection: Connection,
++    data: string,
++    options?: { signal?: AbortSignal; timeoutMs?: number }
++  ) => connection.call('tuiAgents.sendInput', { conversationId: 'c1', data }, options);
++  const settleState = (promise: Promise<unknown>) => {
++    const state = { value: 'pending' as string };
++    promise.then(
++      () => (state.value = 'resolved'),
++      (error: unknown) => (state.value = error instanceof WireError ? error.code : 'error')
++    );
++    return state;
++  };
++  const cut = async (lane: FakeConnection, disconnect: () => void) => {
++    disconnect();
++    for (const call of lane.calls.splice(0)) call.reject(disconnected());
++    await flush();
++  };
++
++  it('rejects cancelled input at once and never replays it', async () => {
++    const { lane, connection, disconnect, reconnect } = setup();
++    const kept = key(connection, 'a');
++    await cut(lane, disconnect);
++    const controller = new AbortController();
++    const cancelled = key(connection, 'b', { signal: controller.signal });
++    const state = settleState(cancelled);
++    controller.abort();
++    await flush();
++
++    expect(state.value).toBe('CANCELLED');
++    reconnect();
++    expect(lane.calls.map((call) => call.input.data)).toEqual(['a']);
++    lane.calls[0]!.resolve({ success: true });
++    await kept;
++  });
++
++  it('frees the buffer slot of cancelled input', async () => {
++    const { lane, connection, disconnect } = setup();
++    void key(connection, 'a');
++    await cut(lane, disconnect);
++    const states: Array<{ value: string }> = [];
++    for (let index = 0; index < 1100; index++) {
++      const controller = new AbortController();
++      states.push(settleState(key(connection, 'x', { signal: controller.signal })));
++      controller.abort();
++    }
++    await flush();
++
++    expect(states.every((state) => state.value === 'CANCELLED')).toBe(true);
++  });
++
++  it('rejects input whose signal was already aborted', async () => {
++    const { connection } = setup();
++    const controller = new AbortController();
++    controller.abort();
++    await expect(key(connection, 'a', { signal: controller.signal })).rejects.toMatchObject({
++      code: 'CANCELLED',
++    });
++  });
++
++  it('expires queued input at its timeout and does not replay it', async () => {
++    const { lane, clock, connection, disconnect, reconnect } = setup();
++    void key(connection, 'a');
++    await cut(lane, disconnect);
++    const state = settleState(key(connection, 'b', { timeoutMs: 1_000 }));
++    await clock.advanceBy(1_000);
++    await flush();
++
++    expect(state.value).toBe('TIMEOUT');
++    reconnect();
++    expect(lane.calls.map((call) => call.input.data)).toEqual(['a']);
++  });
++
++  it('passes only the remaining timeout to a later attempt', async () => {
++    const { lane, clock, connection, disconnect, reconnect } = setup();
++    void key(connection, 'a', { timeoutMs: 1_000 });
++    expect(lane.calls[0]!.options?.timeoutMs).toBe(1_000);
++    await cut(lane, disconnect);
++    await clock.advanceBy(300);
++    reconnect();
++
++    expect(lane.calls).toHaveLength(1);
++    expect(lane.calls[0]!.options?.timeoutMs).toBe(700);
++  });
++
++  it('releases timers and abort listeners when input settles or the connection disposes', async () => {
++    const { lane, connection, disconnect, reconnect, pendingTimers } = setup();
++    const controller = new AbortController();
++    let added = 0;
++    let removed = 0;
++    const addListener = controller.signal.addEventListener.bind(controller.signal);
++    const removeListener = controller.signal.removeEventListener.bind(controller.signal);
++    controller.signal.addEventListener = ((...args: Parameters<typeof addListener>) => {
++      added += 1;
++      addListener(...args);
++    }) as typeof addListener;
++    controller.signal.removeEventListener = ((...args: Parameters<typeof removeListener>) => {
++      removed += 1;
++      removeListener(...args);
++    }) as typeof removeListener;
++
++    const plain = key(connection, 'p');
++    lane.calls[0]!.resolve({ success: true });
++    await plain;
++    lane.calls.length = 0;
++    const baseline = pendingTimers.size;
++
++    const settled = key(connection, 'a', { signal: controller.signal, timeoutMs: 5_000 });
++    await cut(lane, disconnect);
++    reconnect();
++    lane.calls[0]!.resolve({ success: true });
++    await settled;
++    expect(pendingTimers.size).toBe(baseline);
++    expect(removed).toBe(added);
++    expect(added).toBeGreaterThan(0);
++
++    const queued = key(connection, 'b', { timeoutMs: 5_000 });
++    const state = settleState(queued);
++    connection.dispose();
++    await flush();
++    expect(state.value).toBe('DISCONNECTED');
++    expect(pendingTimers.size).toBe(0);
++  });
++});
+diff --git a/apps/emdash-desktop/src/core/services/hosts/node/interactive-lane.ts b/apps/emdash-desktop/src/core/services/hosts/node/interactive-lane.ts
+index 60dce4130..43db64d4d 100644
+--- a/apps/emdash-desktop/src/core/services/hosts/node/interactive-lane.ts
++++ b/apps/emdash-desktop/src/core/services/hosts/node/interactive-lane.ts
+@@ -242,6 +242,10 @@ type PendingInput = {
+   sent: boolean;
+   /** Lane generation of the attempt in flight, if any. */
+   attempt: number | undefined;
++  /** Clock time at which an explicit `timeoutMs` runs out, counted from when the input was queued. */
++  deadlineAt: number | undefined;
++  /** Stops the deadline timer and the abort listener. */
++  cleanup(): void;
+   resolve(value: unknown): void;
+   reject(error: unknown): void;
+ };
+@@ -265,7 +269,41 @@ function createInputReplay(lane: Connection, options: InteractiveLaneOptions) {
+   };
+ 
+   const settle = (entry: PendingInput): void => {
+-    queue.splice(queue.indexOf(entry), 1);
++    entry.cleanup();
++    const index = queue.indexOf(entry);
++    if (index >= 0) queue.splice(index, 1);
++  };
++
++  // Cancellation and deadlines also apply while the input waits for the lane. An attempt in flight
++  // is cancelled or timed out by the call itself.
++  const abandon = (entry: PendingInput, error: WireError): void => {
++    if (entry.attempt !== undefined || !queue.includes(entry)) return;
++    settle(entry);
++    entry.reject(error);
++  };
++
++  const cancelled = (sent: boolean) =>
++    new WireError('CANCELLED', 'Wire call cancelled', sent ? {} : { delivery: 'not-sent' });
++  const timedOut = (entry: PendingInput, timeoutMs: number) =>
++    new WireError(
++      'TIMEOUT',
++      `Interactive input timed out after ${timeoutMs}ms`,
++      entry.sent ? {} : { delivery: 'not-sent' }
++    );
++
++  const watch = (entry: PendingInput): void => {
++    const timeoutMs = entry.options?.timeoutMs;
++    const signal = entry.options?.signal;
++    const timer =
++      entry.deadlineAt !== undefined && timeoutMs !== undefined
++        ? options.clock.schedule(timeoutMs, () => abandon(entry, timedOut(entry, timeoutMs)))
++        : undefined;
++    const onAbort = (): void => abandon(entry, cancelled(entry.sent));
++    signal?.addEventListener('abort', onAbort, { once: true });
++    entry.cleanup = () => {
++      void timer?.dispose();
++      signal?.removeEventListener('abort', onAbort);
++    };
+   };
+ 
+   const refuse = (entry: PendingInput): void => {
+@@ -282,9 +320,18 @@ function createInputReplay(lane: Connection, options: InteractiveLaneOptions) {
+ 
+   const post = (entry: PendingInput, generation: number): void => {
+     const input = entry.sent ? asReplay(entry.input) : entry.input;
++    let callOptions = entry.options;
++    if (entry.deadlineAt !== undefined && entry.options?.timeoutMs !== undefined) {
++      const remaining = Math.ceil(entry.deadlineAt - options.clock.now());
++      if (remaining <= 0) {
++        abandon(entry, timedOut(entry, entry.options.timeoutMs));
++        return;
++      }
++      callOptions = { ...entry.options, timeoutMs: remaining };
++    }
+     entry.sent = true;
+     entry.attempt = generation;
+-    lane.call(entry.path, input, entry.options).then(
++    lane.call(entry.path, input, callOptions).then(
+       (value) => {
+         settle(entry);
+         entry.resolve(value);
+@@ -324,6 +371,7 @@ function createInputReplay(lane: Connection, options: InteractiveLaneOptions) {
+     ): Promise<unknown> {
+       const scope = options.replayScope();
+       if (scope === undefined) return lane.call(path, input, callOptions);
++      if (callOptions?.signal?.aborted) return Promise.reject(cancelled(false));
+       if (queue.length >= MAX_PENDING_INPUTS) {
+         return Promise.reject(
+           new WireError('DISCONNECTED', 'Interactive input buffer is full', {
+@@ -332,22 +380,29 @@ function createInputReplay(lane: Connection, options: InteractiveLaneOptions) {
+         );
+       }
+       return new Promise((resolve, reject) => {
+-        queue.push({
++        const timeoutMs = callOptions?.timeoutMs;
++        const entry: PendingInput = {
+           path,
+           input: { ...input, sequence: { writer, seq: sequence(target) } },
+           options: callOptions,
+           scope,
+           sent: false,
+           attempt: undefined,
++          deadlineAt:
++            timeoutMs !== undefined && timeoutMs > 0 ? options.clock.now() + timeoutMs : undefined,
++          cleanup: () => {},
+           resolve,
+           reject,
+-        });
++        };
++        watch(entry);
++        queue.push(entry);
+         pump();
+       });
+     },
+     pump,
+     dispose(): void {
+       for (const entry of queue.splice(0)) {
++        entry.cleanup();
+         entry.reject(new WireError('DISCONNECTED', 'Wire connection disposed'));
+       }
+     },
 -- 
 2.52.0
 
