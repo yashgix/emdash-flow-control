@@ -4,7 +4,7 @@
 |---|---|
 | `.gitignore` |      174 B |
 | `LICENSE` |    11395 B |
-| `README.md` |     9111 B |
+| `README.md` |     9252 B |
 | `REPRODUCE.md` |     5234 B |
 | `REVISIONS.md` |     1526 B |
 | `data/p29-runs.csv` |     6717 B |
@@ -24,6 +24,7 @@
 | `patches/flow-control-squashed.patch` |   334454 B |
 | `patches/flow-control.bundle` |    84773 B |
 | `patches/stale-frames-sharing.patch` |    30902 B |
+| `patches/stale-topic-frames-ae7df3123..ac95235a1.patch` |    23796 B |
 | `proof/docker/Dockerfile` |      362 B |
 | `proof/harness/analyze.py` |     4904 B |
 | `proof/harness/background-metrics.mjs` |     2151 B |

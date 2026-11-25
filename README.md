@@ -73,7 +73,7 @@ The wire-protocol issue is [#3446](https://github.com/generalaction/emdash/issue
 | `data/` | per-run CSV and the table built from it |
 | `scripts/` | `aggregate.py`, `export_runs.py`, `table_p29_from_raw.py` (the last two need the raw logs, which are not published) |
 | `proof/` | benchmark harness, scripts, plans and Docker image |
-| `patches/` | flow-control patch and bundle, a copy of the flow-control patch rebased onto upstream `c8769892f` (`flow-control-on-main.patch`, apply with `git apply --3way`), and the stale-frames patch |
+| `patches/` | flow-control patch and bundle, a copy of the flow-control patch rebased onto upstream `c8769892f` (`flow-control-on-main.patch`, apply with `git apply --3way`), the stale-frames patch (`stale-frames-sharing.patch`), and the earlier version linked from the issue text (`stale-topic-frames-ae7df3123..ac95235a1.patch`, superseded) |
 | `tests/` | the 17 regression tests for the stale-frames fix |
 | `issue/` | title and body of the wire-protocol issue |
 | `traces/` | two sample recorded traces |
