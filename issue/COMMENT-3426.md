@@ -25,4 +25,4 @@ Data, harness and a walkthrough with the architecture: https://yashgix.github.io
 
 #3444 touches some of the same files (`host-runtime-connection.ts`, `follower.ts`) and complements this: it keeps a busy host connected, and this keeps typing fast on it. Would you prefer this as one PR, or split into the interactive lane and window first, with credit accounting and back-pressure after?
 
-**Update:** there is now a draft PR, https://github.com/generalaction/emdash/pull/3448, based on current `main`. I'm happy to split it if you prefer.
+**Update:** there is now a PR, https://github.com/generalaction/emdash/pull/3448, based on current `main`. I'm happy to split it if you prefer.

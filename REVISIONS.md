@@ -11,4 +11,4 @@
 
 The modified code is also provided as `patches/flow-control-squashed.patch` (one commit on `9e2942b82`) and `patches/flow-control.bundle`.
 
-Flow-control draft pull request #3448: branch `feat/remote-interactive-lane-and-backpressure` on `yashgix/emdash`, commit `527d1a26a20aa85361b07b58695a1f0ff6d881cd` (tree `58f32b7a9ac0b340fc22cb8bd58402949f0c8354`) on upstream `main` `c8769892f`, as `patches/flow-control-on-main.patch`. It is the flow-control change with 7 files reformatted by that tree's current formatter and one unused test variable removed. Checks and results: `verification/flow-control-on-main.md`. The benchmarks were not rerun on it.
+Flow-control pull request #3448: branch `feat/remote-interactive-lane-and-backpressure` on `yashgix/emdash`, commit `527d1a26a20aa85361b07b58695a1f0ff6d881cd` (tree `58f32b7a9ac0b340fc22cb8bd58402949f0c8354`) on upstream `main` `c8769892f`, as `patches/flow-control-on-main.patch`. It is the flow-control change with 7 files reformatted by that tree's current formatter and one unused test variable removed. Checks and results: `verification/flow-control-on-main.md`. The benchmarks were not rerun on it.

@@ -1,6 +1,6 @@
 # Flow-control branch on current `main`
 
-Branch `feat/remote-interactive-lane-and-backpressure`, commit `527d1a26a20aa85361b07b58695a1f0ff6d881cd`, tree `58f32b7a9ac0b340fc22cb8bd58402949f0c8354`, on upstream `main` `c8769892f` (draft pull request #3448). Docker `node:24.14.0-bookworm`, `pnpm install --frozen-lockfile`, 25 Nov 2026.
+Branch `feat/remote-interactive-lane-and-backpressure`, commit `527d1a26a20aa85361b07b58695a1f0ff6d881cd`, tree `58f32b7a9ac0b340fc22cb8bd58402949f0c8354`, on upstream `main` `c8769892f` (pull request #3448). Docker `node:24.14.0-bookworm`, `pnpm install --frozen-lockfile`, 25 Nov 2026.
 
 | Check | Result |
 |---|---|

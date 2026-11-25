@@ -4,9 +4,9 @@
 |---|---|
 | `.gitignore` |      174 B |
 | `LICENSE` |    11395 B |
-| `README.md` |     9918 B |
+| `README.md` |     9940 B |
 | `REPRODUCE.md` |     5234 B |
-| `REVISIONS.md` |     1702 B |
+| `REVISIONS.md` |     1696 B |
 | `data/p29-runs.csv` |     6717 B |
 | `data/p29-table.md` |     2306 B |
 | `fonts/CommitMono-latin-400.woff2` |    48128 B |
@@ -14,8 +14,8 @@
 | `fonts/Inter-latin-variable.woff2` |    48256 B |
 | `fonts/LICENSE-CommitMono.txt` |     4389 B |
 | `fonts/LICENSE-Inter.txt` |     4477 B |
-| `index.html` |    52671 B |
-| `issue/COMMENT-3426.md` |     2746 B |
+| `index.html` |    52688 B |
+| `issue/COMMENT-3426.md` |     2740 B |
 | `issue/FINAL-ISSUE-BODY.md` |     3395 B |
 | `issue/FINAL-ISSUE-TITLE.txt` |       57 B |
 | `issue/UPDATE-COMMENT.md` |      374 B |
@@ -53,4 +53,4 @@
 | `traces/README.md` |      389 B |
 | `traces/tsdown-core.jsonl` |    72811 B |
 | `traces/vitest-wire.jsonl` |   109359 B |
-| `verification/flow-control-on-main.md` |     1597 B |
+| `verification/flow-control-on-main.md` |     1591 B |
