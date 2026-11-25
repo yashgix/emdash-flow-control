@@ -4,7 +4,7 @@
 |---|---|
 | `.gitignore` |      174 B |
 | `LICENSE` |    11395 B |
-| `README.md` |     9940 B |
+| `README.md` |     9934 B |
 | `REPRODUCE.md` |     5234 B |
 | `REVISIONS.md` |     1696 B |
 | `data/p29-runs.csv` |     6717 B |
