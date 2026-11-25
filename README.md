@@ -1,6 +1,6 @@
 # emdash-flow-control
 
-Case study: [yashgix.github.io/emdash-flow-control](https://yashgix.github.io/emdash-flow-control/) · Wire-protocol issue: [generalaction/emdash#3446](https://github.com/generalaction/emdash/issues/3446)
+Case study: [yashgix.github.io/emdash-flow-control](https://yashgix.github.io/emdash-flow-control/) · Wire-protocol issue: [generalaction/emdash#3446](https://github.com/generalaction/emdash/issues/3446) · Fix: [pull request #3447](https://github.com/generalaction/emdash/pull/3447) · Flow-control discussion: [#3426](https://github.com/generalaction/emdash/issues/3426)
 
 Keeping typing responsive in a busy remote terminal in [Emdash](https://github.com/generalaction/emdash), a desktop app that runs coding agents on remote machines over SSH. Open `index.html` for the case study, with an interactive comparison of the versions and a walkthrough of a separate wire-protocol fix.
 
