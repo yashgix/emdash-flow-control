@@ -231,12 +231,12 @@ footer p{margin:0 0 6px}
 <li><b>Runs:</b> 3 repeats, interleaved, each one the only job of mine on the machine. A run counts only if all 8 commands exit 0. All 45 runs counted.</li>
 <li><b>Keys without an echo</b> are keys sent but not echoed within the observation window. The window ends when the commands finish, so on the cut link it can end before the link is restored.</li>
 </ul>
-<p>macOS storage-management processes averaged about 1.3 CPU cores on the machine in the days around the runs. It is not known whether they were busy during a given run. A stuck listing process ran earlier and was stopped before the three counted repeats. No run was dropped or rerun because of either. Full details: <a href="method.md">method.md</a>.</p>
+<p>macOS storage-management processes averaged about 1.3 CPU cores on the machine in the days around the runs. It is not known whether they were busy during a given run. A stuck listing process ran earlier and was stopped before the three counted repeats. No run was dropped or rerun because of either. Full details: <a href="https://github.com/yashgix/emdash-flow-control/blob/main/method.md">method.md</a>.</p>
 </section>
 
 <section class="block" id="results">
 <h2>Results</h2>
-<p class="mut">Median of 3 runs per cell. Ranges are in <a href="table.md">table.md</a> and every run is in <a href="data/p29-runs.csv">data/p29-runs.csv</a>.</p>
+<p class="mut">Median of 3 runs per cell. Ranges are in <a href="https://github.com/yashgix/emdash-flow-control/blob/main/table.md">table.md</a> and every run is in <a href="https://github.com/yashgix/emdash-flow-control/blob/main/data/p29-runs.csv">data/p29-runs.csv</a>.</p>
 <div class="controls"><div><span class="label" id="mt">Chart</span><div class="seg" role="group" aria-labelledby="mt" id="metricSeg"></div></div></div>
 <div class="bars" id="charts"></div>
 <div style="margin-top:18px"><table id="tbl"></table></div>
@@ -262,7 +262,7 @@ footer p{margin:0 0 6px}
 <p>The frozen log comes from the test harness, which injects the error through the source. In the desktop app the likely impact is the extra snapshot resync, because no log source in the current code reports a non-retrying error. This is separate from #3426.</p>
 <h3>Open question for the maintainers</h3>
 <p>Should two connections on one transport keep sharing a topic attachment? Today the server keeps one attachment per topic and both connections receive its frames. Replacing the attachment changes that, and a later topic-only detach from the replaced connection could remove the replacement. If sharing should stay, the server can keep its behavior and each client can drop only the ids it abandoned itself.</p>
-<p>The issue is <a href="https://github.com/generalaction/emdash/issues/3446">generalaction/emdash#3446</a>. Its text is <a href="issue/FINAL-ISSUE-BODY.md">issue/FINAL-ISSUE-BODY.md</a>, the test file is <a href="tests/stale-topic-frames.test.ts">tests/stale-topic-frames.test.ts</a> and the patch is <a href="patches/stale-topic-frames-ae7df3123..ac95235a1.patch">patches/stale-topic-frames-ae7df3123..ac95235a1.patch</a>.</p>
+<p>The issue is <a href="https://github.com/generalaction/emdash/issues/3446">generalaction/emdash#3446</a>. Its text is <a href="https://github.com/yashgix/emdash-flow-control/blob/main/issue/FINAL-ISSUE-BODY.md">issue/FINAL-ISSUE-BODY.md</a>, the test file is <a href="https://github.com/yashgix/emdash-flow-control/blob/main/tests/stale-topic-frames.test.ts">tests/stale-topic-frames.test.ts</a> and the patch is <a href="https://github.com/yashgix/emdash-flow-control/blob/main/patches/stale-topic-frames-ae7df3123..ac95235a1.patch">patches/stale-topic-frames-ae7df3123..ac95235a1.patch</a>.</p>
 </section>
 
 <section class="block" id="limits">
@@ -281,10 +281,10 @@ footer p{margin:0 0 6px}
 <section class="block" id="evidence">
 <h2>Evidence and code</h2>
 <ul>
-<li><a href="data/p29-runs.csv">data/p29-runs.csv</a>: one row per counted run. <a href="data/p29-table.md">data/p29-table.md</a>: medians and ranges, built by <code>scripts/aggregate.py</code>.</li>
-<li><a href="REPRODUCE.md">REPRODUCE.md</a>, <code>proof/</code>: the harness, plans and Docker setup. <a href="REVISIONS.md">REVISIONS.md</a>: pinned revisions.</li>
+<li><a href="https://github.com/yashgix/emdash-flow-control/blob/main/data/p29-runs.csv">data/p29-runs.csv</a>: one row per counted run. <a href="https://github.com/yashgix/emdash-flow-control/blob/main/data/p29-table.md">data/p29-table.md</a>: medians and ranges, built by <code>scripts/aggregate.py</code>.</li>
+<li><a href="https://github.com/yashgix/emdash-flow-control/blob/main/REPRODUCE.md">REPRODUCE.md</a>, <code>proof/</code>: the harness, plans and Docker setup. <a href="https://github.com/yashgix/emdash-flow-control/blob/main/REVISIONS.md">REVISIONS.md</a>: pinned revisions.</li>
 <li><code>patches/flow-control-squashed.patch</code> and <code>patches/flow-control.bundle</code>: the flow-control change on upstream <code>9e2942b8</code>.</li>
-<li><a href="traces/README.md">traces/</a>: two sample recorded traces.</li>
+<li><a href="https://github.com/yashgix/emdash-flow-control/blob/main/traces/README.md">traces/</a>: two sample recorded traces.</li>
 <li>Related upstream work: <a href="https://github.com/generalaction/emdash/issues/3426">#3426</a>, and the open pull request <a href="https://github.com/generalaction/emdash/pull/3444">#3444</a> on reconnect loops on busy hosts, which changes the same host connection and follower files and also touches <code>protocol.ts</code> in a different place from the stale-frame fix.</li>
 </ul>
 </section>
